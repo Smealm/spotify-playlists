@@ -1,3 +1,4 @@
+import argparse
 import os
 import re
 import time
@@ -11,20 +12,6 @@ import requests
 # ============================================================
 # CONFIG
 # ============================================================
-
-ARCHIVE_URL = (
-    "https://raw.githubusercontent.com/"
-    "mackorone/spotify-playlist-archive-2/"
-    "refs/heads/main/playlists/cumulative/"
-    "37i9dQZF1DXdgz8ZB7c2CP.md"
-)
-
-DEST_PLAYLIST_ID = "0d9fkV0DPxsq5Ag7IP8obL"
-
-CLIENT_ID = os.environ["SPOTIFY_CLIENT_ID"]
-CLIENT_SECRET = os.environ["SPOTIFY_CLIENT_SECRET"]
-REFRESH_TOKEN = os.environ["SPOTIFY_REFRESH_TOKEN"]
-
 
 # ------------------------------------------------------------
 # Dedup settings
@@ -40,20 +27,10 @@ DRY_RUN = False
 #
 # Example:
 #   5 means tracks may differ by up to 5 seconds.
-#
-# Spotify Dedup supports configurable duration tolerance.
-# A relatively conservative value is safer for an importer.
 DURATION_TOLERANCE_SECONDS = 5
 
 
 # Minimum title similarity.
-#
-# 1.0 = exact
-# 0.95 = extremely similar
-# 0.90 = fairly similar
-#
-# We primarily use normalized exact title matching below,
-# but this provides some tolerance for punctuation / metadata.
 TITLE_SIMILARITY_THRESHOLD = 0.92
 
 
@@ -64,6 +41,51 @@ ARTIST_SIMILARITY_THRESHOLD = 0.92
 # Spotify API batch size.
 # Spotify supports up to 50 track IDs for the tracks endpoint.
 TRACK_METADATA_BATCH_SIZE = 50
+
+
+# ============================================================
+# COMMAND-LINE ARGUMENTS
+# ============================================================
+
+def parse_arguments():
+    parser = argparse.ArgumentParser(
+        description=(
+            "Mirror a Spotify Playlist Archive cumulative "
+            "playlist into a permanent Spotify playlist."
+        )
+    )
+
+    parser.add_argument(
+        "--archive-url",
+        required=True,
+        help=(
+            "Raw GitHub URL of the Spotify Playlist Archive "
+            "cumulative Markdown file."
+        ),
+    )
+
+    parser.add_argument(
+        "--destination-playlist-id",
+        required=True,
+        help="Spotify playlist ID to push the archive into.",
+    )
+
+    return parser.parse_args()
+
+
+ARGS = parse_arguments()
+
+ARCHIVE_URL = ARGS.archive_url
+DEST_PLAYLIST_ID = ARGS.destination_playlist_id
+
+
+# ============================================================
+# SPOTIFY CREDENTIALS
+# ============================================================
+
+CLIENT_ID = os.environ["SPOTIFY_CLIENT_ID"]
+CLIENT_SECRET = os.environ["SPOTIFY_CLIENT_SECRET"]
+REFRESH_TOKEN = os.environ["SPOTIFY_REFRESH_TOKEN"]
 
 
 # ============================================================
@@ -129,15 +151,6 @@ def spotify_request(method, url, access_token, **kwargs):
 def normalize_text(value):
     """
     Normalize text for fuzzy duplicate matching.
-
-    Examples:
-
-        "Don't Let Me Down"
-        "DON'T LET ME DOWN"
-
-    become equivalent.
-
-    Accents are removed and punctuation is normalized.
     """
 
     if not value:
@@ -156,7 +169,7 @@ def normalize_text(value):
 
     value = value.lower()
 
-    # Normalize common ampersand usage.
+    # Normalize ampersands.
     value = value.replace("&", " and ")
 
     # Remove common featuring notation.
@@ -184,33 +197,20 @@ def normalize_text(value):
 
 
 def normalize_artist_names(artists):
-    """
-    Convert artist names into a normalized representation.
-
-    Artist ordering is preserved because it can sometimes
-    distinguish different tracks.
-    """
-
     normalized = [
         normalize_text(artist)
         for artist in artists
         if artist
     ]
 
-    normalized = [
+    return [
         artist
         for artist in normalized
         if artist
     ]
 
-    return normalized
-
 
 def artist_string(track):
-    """
-    Produce the normalized artist string for a Spotify track.
-    """
-
     artists = track.get("artists", [])
 
     names = [
@@ -262,54 +262,8 @@ def normalize_track_id(value):
 
 
 # ============================================================
-# TRACK FINGERPRINTING
+# TRACK SIMILARITY
 # ============================================================
-
-def exact_fingerprint(track):
-    """
-    Exact Spotify identity.
-
-    This is the strongest possible match.
-    """
-
-    return track.get("id")
-
-
-def fuzzy_fingerprint(track):
-    """
-    Dedup-style fuzzy fingerprint.
-
-    The important fields are:
-
-        normalized title
-        normalized artists
-        duration
-
-    Duration itself is handled separately because we allow
-    a configurable tolerance.
-    """
-
-    title = normalize_text(
-        track.get("name", "")
-    )
-
-    artists = artist_string(track)
-
-    duration_ms = track.get(
-        "duration_ms",
-        0,
-    )
-
-    duration_seconds = round(
-        duration_ms / 1000
-    )
-
-    return (
-        title,
-        artists,
-        duration_seconds,
-    )
-
 
 def title_similarity(a, b):
     return SequenceMatcher(
@@ -327,33 +281,17 @@ def artist_similarity(a, b):
     ).ratio()
 
 
-def is_fuzzy_duplicate(
-    candidate,
-    existing,
-):
+def is_fuzzy_duplicate(candidate, existing):
     """
     Determine whether two Spotify tracks represent the
-    same song using Dedup-style metadata matching.
+    same song using metadata matching.
 
     Conditions:
 
-        1. title must be sufficiently similar
-        2. artists must be sufficiently similar
-        3. duration must be within tolerance
-
-    Exact Spotify IDs are handled separately and should be
-    checked before this function.
+        1. title similarity
+        2. artist similarity
+        3. duration within tolerance
     """
-
-    candidate_title = candidate.get(
-        "name",
-        "",
-    )
-
-    existing_title = existing.get(
-        "name",
-        "",
-    )
 
     candidate_duration = (
         candidate.get("duration_ms", 0)
@@ -377,8 +315,8 @@ def is_fuzzy_duplicate(
         return False
 
     title_score = title_similarity(
-        candidate_title,
-        existing_title,
+        candidate.get("name", ""),
+        existing.get("name", ""),
     )
 
     if title_score < TITLE_SIMILARITY_THRESHOLD:
@@ -396,12 +334,12 @@ def is_fuzzy_duplicate(
 
 
 # ============================================================
-# READ CREAMY ARCHIVE
+# READ CUMULATIVE ARCHIVE
 # ============================================================
 
 def get_archive_tracks():
     print(
-        "Downloading Creamy cumulative archive..."
+        "Downloading cumulative playlist archive..."
     )
 
     response = requests.get(
@@ -471,13 +409,7 @@ def get_archive_tracks():
             }
         )
 
-    # --------------------------------------------------------
-    # Oldest → newest internally.
-    #
-    # We reverse this later when building the final playlist
-    # so that newest songs are at playlist position #1.
-    # --------------------------------------------------------
-
+    # Oldest → newest.
     track_rows.sort(
         key=lambda row: row["added"]
     )
@@ -497,7 +429,7 @@ def get_archive_tracks():
         track_ids.append(track_id)
 
     print(
-        f"Found {len(track_ids)} unique Creamy tracks "
+        f"Found {len(track_ids)} unique archive tracks "
         f"in chronological order."
     )
 
@@ -583,7 +515,7 @@ def get_playlist_items(access_token):
 
         url = data.get("next")
 
-        # next already includes query parameters.
+        # next already contains query parameters.
         params = None
 
     print(
@@ -608,12 +540,7 @@ def get_track_metadata(
     Returns:
 
         {
-            "spotify_id": {
-                "id": ...,
-                "name": ...,
-                "artists": [...],
-                "duration_ms": ...
-            }
+            "spotify_id": track_object
         }
     """
 
@@ -692,13 +619,13 @@ def get_track_metadata(
 
 class DuplicateIndex:
     """
-    Keeps an in-memory index of tracks already represented
-    in the destination playlist.
+    In-memory index of tracks already represented in the
+    destination playlist.
 
-    Two forms of matching are supported:
+    Matching:
 
-        1. Exact Spotify ID.
-        2. Dedup-style fuzzy metadata matching.
+        1. Exact Spotify ID
+        2. Fuzzy metadata
     """
 
     def __init__(self):
@@ -718,11 +645,6 @@ class DuplicateIndex:
         return track_id in self.ids
 
     def find_fuzzy_duplicate(self, candidate):
-        """
-        Return the existing track that fuzzy-matches candidate,
-        or None.
-        """
-
         for existing in self.tracks.values():
             if is_fuzzy_duplicate(
                 candidate,
@@ -747,20 +669,14 @@ class DuplicateIndex:
 
         candidate_id = candidate.get("id")
 
-        # --------------------------------------------
         # Exact Spotify ID.
-        # --------------------------------------------
-
         if self.contains_exact(candidate_id):
             return (
                 self.tracks[candidate_id],
                 "exact",
             )
 
-        # --------------------------------------------
         # Fuzzy metadata match.
-        # --------------------------------------------
-
         duplicate = self.find_fuzzy_duplicate(
             candidate
         )
@@ -778,78 +694,7 @@ class DuplicateIndex:
 
 
 # ============================================================
-# FIND MISSING TRACKS
-# ============================================================
-
-def find_missing_archive_tracks(
-    archive_tracks,
-    existing_track_metadata,
-):
-    """
-    Determine which Creamy archive tracks are actually
-    missing from the destination playlist.
-
-    Both exact-ID and fuzzy Dedup-style matching are used.
-    """
-
-    duplicate_index = DuplicateIndex()
-
-    for track in existing_track_metadata.values():
-        duplicate_index.add(track)
-
-    missing = []
-
-    exact_duplicates = 0
-    fuzzy_duplicates = 0
-
-    print()
-    print(
-        "Checking Creamy tracks for duplicates..."
-    )
-
-    for position, track_id in enumerate(
-        archive_tracks,
-        start=1,
-    ):
-        candidate = existing_track_metadata.get(
-            track_id
-        )
-
-        # This dictionary only contains existing playlist
-        # tracks at this stage, so archive metadata needs to
-        # be supplied separately.
-        #
-        # This branch is intentionally unused here.
-        if candidate:
-            pass
-
-    return (
-        missing,
-        exact_duplicates,
-        fuzzy_duplicates,
-    )
-
-
-# ============================================================
-# BUILD ARCHIVE METADATA
-# ============================================================
-
-def get_archive_metadata(
-    archive_tracks,
-    access_token,
-):
-    """
-    Fetch metadata for every Creamy archive track.
-    """
-
-    return get_track_metadata(
-        archive_tracks,
-        access_token,
-    )
-
-
-# ============================================================
-# DEDUPLICATION
+# DETERMINE TRACKS TO ADD
 # ============================================================
 
 def determine_tracks_to_add(
@@ -858,21 +703,16 @@ def determine_tracks_to_add(
     existing_metadata,
 ):
     """
-    Compare every Creamy track against the destination
+    Compare every archive track against the destination
     playlist.
 
     A track is skipped if:
 
         - exact Spotify ID already exists, OR
-        - a fuzzy Dedup-style duplicate exists.
-
-    IMPORTANT:
+        - a fuzzy duplicate already exists.
 
     The duplicate index is updated immediately whenever a
-    Creamy track is accepted.
-
-    This prevents two archive entries that represent the
-    same song from both being added during this run.
+    track is accepted.
     """
 
     duplicate_index = DuplicateIndex()
@@ -945,13 +785,10 @@ def determine_tracks_to_add(
 
             continue
 
-        # ----------------------------------------------------
         # This is genuinely new.
         #
-        # Add it to the index immediately so another Creamy
-        # entry later in the archive cannot add a duplicate.
-        # ----------------------------------------------------
-
+        # Add it immediately so another archive entry cannot
+        # add a duplicate later in the same run.
         duplicate_index.add(candidate)
 
         tracks_to_add.append(candidate)
@@ -965,9 +802,7 @@ def determine_tracks_to_add(
         )
 
     print()
-    print(
-        "Deduplication results:"
-    )
+    print("Deduplication results:")
     print(
         f"  Exact duplicates:   {exact_duplicates}"
     )
@@ -995,11 +830,7 @@ def add_tracks(
     """
     Add genuinely new tracks to Spotify.
 
-    Tracks are temporarily appended. They are reordered
-    afterward.
-
-    We perform a final live duplicate check immediately
-    before each batch.
+    Tracks are temporarily appended and reordered afterward.
     """
 
     if not tracks_to_add:
@@ -1011,9 +842,7 @@ def add_tracks(
 
     if DRY_RUN:
         print()
-        print(
-            "DRY RUN enabled."
-        )
+        print("DRY RUN enabled.")
         print(
             f"Would add {len(tracks_to_add)} tracks."
         )
@@ -1035,14 +864,7 @@ def add_tracks(
             start:start + 100
         ]
 
-        # ----------------------------------------------------
-        # Final safety check.
-        #
-        # Re-read the playlist right before adding this batch.
-        # This protects against another run/process changing
-        # the playlist between our initial read and now.
-        # ----------------------------------------------------
-
+        # Final live duplicate check.
         current_ids = get_playlist_items(
             access_token
         )
@@ -1096,8 +918,7 @@ def add_tracks(
         ]
 
         print(
-            f"Adding "
-            f"{len(safe_batch)} tracks..."
+            f"Adding {len(safe_batch)} tracks..."
         )
 
         spotify_request(
@@ -1117,94 +938,6 @@ def add_tracks(
 
 
 # ============================================================
-# COMPUTE DESIRED ORDER
-# ============================================================
-
-def compute_desired_order(
-    archive_tracks,
-    current_tracks,
-    archive_metadata,
-):
-    """
-    Build the final playlist order.
-
-    IMPORTANT:
-
-    The archive contains Spotify IDs, while fuzzy duplicate
-    detection may have determined that an archive track is
-    represented by a DIFFERENT Spotify ID already in the
-    playlist.
-
-    Therefore we must map each Creamy archive entry to the
-    actual existing playlist track that represents it.
-
-    Result:
-
-        Creamy tracks first, newest → oldest
-        followed by non-Creamy extras.
-
-    Nothing is deleted.
-    """
-
-    current_metadata = archive_metadata
-
-    # Build metadata for current playlist tracks.
-    #
-    # This parameter is actually supplied by the caller as
-    # a metadata dictionary keyed by current Spotify ID.
-    current_metadata = archive_metadata
-
-    # --------------------------------------------
-    # Index current playlist tracks.
-    # --------------------------------------------
-
-    index = DuplicateIndex()
-
-    for track in current_metadata.values():
-        index.add(track)
-
-    desired = []
-
-    used_ids = set()
-
-    # --------------------------------------------
-    # Match each Creamy archive entry to an actual
-    # playlist track.
-    # --------------------------------------------
-
-    for archive_id in reversed(archive_tracks):
-        # If the exact archive ID exists, use it.
-        if archive_id in current_metadata:
-            actual_id = archive_id
-
-            if actual_id not in used_ids:
-                desired.append(actual_id)
-                used_ids.add(actual_id)
-
-            continue
-
-        # Otherwise fuzzy-match the archive track.
-        #
-        # The caller needs to provide archive metadata
-        # separately for this branch, so this function is
-        # replaced below by build_desired_order().
-        pass
-
-    # --------------------------------------------
-    # Append non-Creamy tracks in their current
-    # relative order.
-    # --------------------------------------------
-
-    for track_id in current_metadata:
-        if track_id in used_ids:
-            continue
-
-        desired.append(track_id)
-
-    return desired
-
-
-# ============================================================
 # BUILD FINAL DESIRED ORDER
 # ============================================================
 
@@ -1215,28 +948,14 @@ def build_desired_order(
     current_metadata,
 ):
     """
-    Build the final order while respecting fuzzy duplicate
-    relationships.
+    Build the final playlist order.
 
-    For every Creamy archive track:
+    Archive tracks are placed:
 
-        exact ID exists?
-            use that playlist item
+        NEWEST → OLDEST
 
-        otherwise:
-            find its fuzzy equivalent in the playlist
-
-        otherwise:
-            it should have been added and will now exist
-
-    FINAL ORDER:
-
-        1. NEWEST Creamy track
-        2. Next newest Creamy track
-        3. Next newest Creamy track
-        ...
-        N. OLDEST Creamy track
-        N+1. Non-Creamy extras in their existing order
+    Non-archive tracks are preserved afterward in their
+    existing relative order.
 
     Nothing is deleted.
     """
@@ -1250,18 +969,7 @@ def build_desired_order(
     used_ids = set()
 
     # --------------------------------------------------------
-    # Creamy tracks in REVERSE historical order.
-    #
-    # get_archive_tracks() gives us:
-    #
-    #     oldest → newest
-    #
-    # reversed() changes this to:
-    #
-    #     newest → oldest
-    #
-    # Therefore the newest Creamy song becomes playlist
-    # position #1.
+    # Archive tracks newest → oldest.
     # --------------------------------------------------------
 
     for archive_id in reversed(archive_tracks):
@@ -1298,10 +1006,7 @@ def build_desired_order(
         used_ids.add(actual_id)
 
     # --------------------------------------------------------
-    # Everything else stays after Creamy.
-    #
-    # Preserve the existing relative order of non-Creamy
-    # tracks.
+    # Preserve non-archive tracks after the archive.
     # --------------------------------------------------------
 
     for track_id in current_tracks:
@@ -1447,7 +1152,7 @@ def reorder_playlist(
 def main():
     print("=" * 60)
     print(
-        "Creamy → Permanent Playlist"
+        "Spotify Playlist Archive → Permanent Playlist"
     )
     print(
         "Dedup-style importer"
@@ -1456,6 +1161,16 @@ def main():
         "Newest → Oldest ordering"
     )
     print("=" * 60)
+    print()
+
+    print(
+        f"Archive: {ARCHIVE_URL}"
+    )
+
+    print(
+        f"Destination playlist: {DEST_PLAYLIST_ID}"
+    )
+
     print()
 
     if DRY_RUN:
@@ -1468,14 +1183,14 @@ def main():
         print()
 
     # --------------------------------------------------------
-    # 1. Read Creamy archive.
+    # 1. Read cumulative archive.
     # --------------------------------------------------------
 
     archive_tracks = get_archive_tracks()
 
     if not archive_tracks:
         raise RuntimeError(
-            "Creamy archive returned no tracks. "
+            "Archive returned no tracks. "
             "Refusing to modify playlist."
         )
 
@@ -1498,7 +1213,7 @@ def main():
     )
 
     # --------------------------------------------------------
-    # 4. Fetch metadata for EXISTING playlist.
+    # 4. Fetch existing playlist metadata.
     # --------------------------------------------------------
 
     existing_metadata = get_track_metadata(
@@ -1507,18 +1222,16 @@ def main():
     )
 
     # --------------------------------------------------------
-    # 5. Fetch metadata for Creamy archive.
+    # 5. Fetch archive metadata.
     # --------------------------------------------------------
 
-    archive_metadata = get_archive_metadata(
+    archive_metadata = get_track_metadata(
         archive_tracks,
         access_token,
     )
 
     # --------------------------------------------------------
-    # 6. Determine what actually needs to be added.
-    #
-    # This is where exact + fuzzy Dedup matching happens.
+    # 6. Determine tracks that need to be added.
     # --------------------------------------------------------
 
     tracks_to_add = determine_tracks_to_add(
@@ -1556,14 +1269,7 @@ def main():
     # --------------------------------------------------------
     # 10. Build desired order.
     #
-    # IMPORTANT:
-    #
-    # This now uses reversed(archive_tracks), meaning:
-    #
-    #     NEWEST → OLDEST
-    #
-    # The newest Creamy song will therefore be playlist
-    # position #1.
+    # NEWEST → OLDEST
     # --------------------------------------------------------
 
     desired_tracks = build_desired_order(
@@ -1613,9 +1319,7 @@ def main():
     )
 
     print()
-    print(
-        "Done."
-    )
+    print("Done.")
 
 
 # ============================================================
