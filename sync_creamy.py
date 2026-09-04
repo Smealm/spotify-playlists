@@ -471,7 +471,13 @@ def get_archive_tracks():
             }
         )
 
-    # Oldest → newest.
+    # --------------------------------------------------------
+    # Oldest → newest internally.
+    #
+    # We reverse this later when building the final playlist
+    # so that newest songs are at playlist position #1.
+    # --------------------------------------------------------
+
     track_rows.sort(
         key=lambda row: row["added"]
     )
@@ -1134,7 +1140,7 @@ def compute_desired_order(
 
     Result:
 
-        Creamy tracks first, in chronological order
+        Creamy tracks first, newest → oldest
         followed by non-Creamy extras.
 
     Nothing is deleted.
@@ -1166,7 +1172,7 @@ def compute_desired_order(
     # playlist track.
     # --------------------------------------------
 
-    for archive_id in archive_tracks:
+    for archive_id in reversed(archive_tracks):
         # If the exact archive ID exists, use it.
         if archive_id in current_metadata:
             actual_id = archive_id
@@ -1223,7 +1229,16 @@ def build_desired_order(
         otherwise:
             it should have been added and will now exist
 
-    Then append any non-Creamy playlist tracks.
+    FINAL ORDER:
+
+        1. NEWEST Creamy track
+        2. Next newest Creamy track
+        3. Next newest Creamy track
+        ...
+        N. OLDEST Creamy track
+        N+1. Non-Creamy extras in their existing order
+
+    Nothing is deleted.
     """
 
     current_index = DuplicateIndex()
@@ -1235,10 +1250,21 @@ def build_desired_order(
     used_ids = set()
 
     # --------------------------------------------------------
-    # Creamy tracks in historical order.
+    # Creamy tracks in REVERSE historical order.
+    #
+    # get_archive_tracks() gives us:
+    #
+    #     oldest → newest
+    #
+    # reversed() changes this to:
+    #
+    #     newest → oldest
+    #
+    # Therefore the newest Creamy song becomes playlist
+    # position #1.
     # --------------------------------------------------------
 
-    for archive_id in archive_tracks:
+    for archive_id in reversed(archive_tracks):
         archive_track = archive_metadata.get(
             archive_id
         )
@@ -1274,7 +1300,8 @@ def build_desired_order(
     # --------------------------------------------------------
     # Everything else stays after Creamy.
     #
-    # Preserve the existing relative order.
+    # Preserve the existing relative order of non-Creamy
+    # tracks.
     # --------------------------------------------------------
 
     for track_id in current_tracks:
@@ -1425,6 +1452,9 @@ def main():
     print(
         "Dedup-style importer"
     )
+    print(
+        "Newest → Oldest ordering"
+    )
     print("=" * 60)
     print()
 
@@ -1525,6 +1555,15 @@ def main():
 
     # --------------------------------------------------------
     # 10. Build desired order.
+    #
+    # IMPORTANT:
+    #
+    # This now uses reversed(archive_tracks), meaning:
+    #
+    #     NEWEST → OLDEST
+    #
+    # The newest Creamy song will therefore be playlist
+    # position #1.
     # --------------------------------------------------------
 
     desired_tracks = build_desired_order(
@@ -1557,6 +1596,10 @@ def main():
 
     print(
         f"Desired playlist:     {len(desired_tracks)}"
+    )
+
+    print(
+        "Ordering:             NEWEST → OLDEST"
     )
 
     # --------------------------------------------------------
