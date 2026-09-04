@@ -10,6 +10,16 @@ Spotify Playlist Archive already keeps track of songs that have been added to an
 
 ---
 
+# ⚠️ Heads Up: Archive Song Count Disparity
+
+A cumulative archive may contain **more songs** than are currently present in the actual Spotify playlist. This is expected.
+
+The cumulative archive counts **every occurrence** of a song, including when it is removed and later re-added. The actual Spotify playlist only contains **one copy of each song**.
+
+The final archive may also contain fewer tracks if some songs are no longer available on Spotify or in your region.
+
+---
+
 # Full Archives
 
 ## Electronic
