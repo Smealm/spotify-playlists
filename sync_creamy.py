@@ -62,7 +62,6 @@ def spotify_request(method, url, access_token, **kwargs):
             **kwargs,
         )
 
-        # Spotify rate limiting
         if response.status_code == 429:
             retry_after = int(
                 response.headers.get("Retry-After", "5")
@@ -81,7 +80,7 @@ def spotify_request(method, url, access_token, **kwargs):
 
 
 # ============================================================
-# READ CUMULATIVE ARCHIVE
+# READ CREAMY ARCHIVE
 # ============================================================
 
 def get_archive_tracks():
@@ -96,36 +95,19 @@ def get_archive_tracks():
 
     markdown = response.text
 
-    # --------------------------------------------------------
-    # The cumulative archive is a Markdown table:
-    #
-    # | Title | Artist(s) | Album | Length | Added | Removed |
-    #
-    # We extract:
-    #
-    #   Spotify track ID
-    #   Added date
-    #
-    # Then sort by Added date so the tracks are returned in
-    # the same chronological order in which they were added
-    # to Creamy.
-    # --------------------------------------------------------
-
-    track_rows = []
-
     track_pattern = re.compile(
         r"https://open\.spotify\.com/track/"
         r"([A-Za-z0-9]+)"
     )
 
+    track_rows = []
+
     for line in markdown.splitlines():
         line = line.strip()
 
-        # Only process Markdown table rows.
         if not line.startswith("|"):
             continue
 
-        # Extract the Spotify track ID.
         match = track_pattern.search(line)
 
         if not match:
@@ -133,13 +115,12 @@ def get_archive_tracks():
 
         track_id = match.group(1)
 
-        # Split the Markdown table row into columns.
         columns = [
             column.strip()
             for column in line.strip("|").split("|")
         ]
 
-        # We expect:
+        # Expected:
         #
         # 0 = Title
         # 1 = Artist(s)
@@ -147,36 +128,28 @@ def get_archive_tracks():
         # 3 = Length
         # 4 = Added
         # 5 = Removed
-        #
+
         if len(columns) < 5:
             continue
 
         added_string = columns[4]
 
-        # Ignore the table header/separator.
         if added_string.lower() == "added":
             continue
 
         if set(added_string) <= {"-", ":"}:
             continue
 
-        # Try to parse the Added date.
-        #
-        # The archive uses dates such as:
-        #
-        # 2021-12-21
-        #
-        # If the date can't be parsed, put the track at the
-        # end rather than crashing the entire sync.
         try:
             added_date = datetime.strptime(
                 added_string,
                 "%Y-%m-%d",
             )
+
         except ValueError:
             print(
                 f"Warning: couldn't parse Added date "
-                f"'{added_string}' for track {track_id}"
+                f"'{added_string}' for {track_id}"
             )
 
             added_date = datetime.max
@@ -188,21 +161,12 @@ def get_archive_tracks():
             }
         )
 
-    # --------------------------------------------------------
-    # Sort chronologically:
-    #
-    # oldest Added date → newest Added date
-    # --------------------------------------------------------
-
+    # Oldest → newest
     track_rows.sort(
         key=lambda row: row["added"]
     )
 
-    # --------------------------------------------------------
-    # Remove duplicate track IDs while preserving the
-    # chronological order.
-    # --------------------------------------------------------
-
+    # Remove duplicate Spotify IDs.
     seen = set()
     track_ids = []
 
@@ -216,37 +180,53 @@ def get_archive_tracks():
         track_ids.append(track_id)
 
     print(
-        f"Found {len(track_ids)} unique tracks "
+        f"Found {len(track_ids)} unique Creamy tracks "
         f"in chronological order."
     )
-
-    if track_ids:
-        print(
-            f"First added: {track_rows[0]['added'].date()}"
-        )
-
-        valid_dates = [
-            row["added"]
-            for row in track_rows
-            if row["added"] != datetime.max
-        ]
-
-        if valid_dates:
-            print(
-                f"Last added:  {max(valid_dates).date()}"
-            )
 
     return track_ids
 
 
 # ============================================================
-# READ DESTINATION PLAYLIST
+# READ PLAYLIST
 # ============================================================
 
-def get_existing_tracks(access_token):
-    print("Reading your Creamy archive playlist...")
+def get_playlist_snapshot(access_token):
+    """
+    Get the current playlist snapshot ID.
 
-    track_ids = set()
+    Spotify requires the snapshot ID when reordering.
+    """
+
+    response = spotify_request(
+        "GET",
+        f"https://api.spotify.com/v1/"
+        f"playlists/{DEST_PLAYLIST_ID}",
+        access_token,
+        params={
+            "fields": "snapshot_id",
+        },
+    )
+
+    return response.json()["snapshot_id"]
+
+
+def get_playlist_items(access_token):
+    """
+    Return the playlist's current items in their exact order.
+
+    Example:
+
+        [
+            "track_id_A",
+            "track_id_B",
+            "track_id_C",
+        ]
+    """
+
+    print("Reading destination playlist...")
+
+    track_ids = []
 
     url = (
         f"https://api.spotify.com/v1/"
@@ -280,36 +260,54 @@ def get_existing_tracks(access_token):
             track_id = track.get("id")
 
             if track_id:
-                track_ids.add(track_id)
+                track_ids.append(track_id)
 
-        # Spotify gives us the next URL.
         url = data.get("next")
 
-        # `next` already contains its own query parameters.
+        # The next URL already contains its query parameters.
         params = None
 
     print(
-        f"Found {len(track_ids)} existing tracks "
-        f"in your playlist."
+        f"Found {len(track_ids)} tracks "
+        f"in destination playlist."
     )
 
     return track_ids
 
 
 # ============================================================
-# ADD TRACKS
+# ADD MISSING TRACKS
 # ============================================================
 
-def add_tracks(track_ids, access_token):
-    if not track_ids:
-        print("Nothing new to add.")
+def add_missing_tracks(
+    archive_tracks,
+    existing_tracks,
+    access_token,
+):
+    existing_set = set(existing_tracks)
+
+    missing_tracks = [
+        track_id
+        for track_id in archive_tracks
+        if track_id not in existing_set
+    ]
+
+    if not missing_tracks:
+        print("No new Creamy tracks to add.")
         return
 
-    total = len(track_ids)
+    print(
+        f"Found {len(missing_tracks)} new Creamy tracks."
+    )
 
-    # Spotify permits a maximum of 100 items per request.
+    total = len(missing_tracks)
+
+    # Spotify allows up to 100 items per request.
+    #
+    # These are temporarily appended. We will immediately
+    # reorder the entire playlist afterward.
     for start in range(0, total, 100):
-        batch = track_ids[start:start + 100]
+        batch = missing_tracks[start:start + 100]
 
         uris = [
             f"spotify:track:{track_id}"
@@ -318,7 +316,7 @@ def add_tracks(track_ids, access_token):
 
         print(
             f"Adding {start + 1}-{start + len(batch)} "
-            f"of {total}..."
+            f"of {total} new tracks..."
         )
 
         spotify_request(
@@ -331,7 +329,168 @@ def add_tracks(track_ids, access_token):
             },
         )
 
-    print(f"Added {total} tracks.")
+    print(
+        f"Added {total} new Creamy tracks."
+    )
+
+
+# ============================================================
+# COMPUTE DESIRED ORDER
+# ============================================================
+
+def compute_desired_order(
+    archive_tracks,
+    current_tracks,
+):
+    """
+    Build the final desired playlist order.
+
+    All Creamy tracks appear first, in chronological order.
+
+    Any tracks that already exist in the destination playlist
+    but aren't present in the Creamy archive are preserved and
+    placed after the Creamy tracks.
+
+    This means the script NEVER deletes an existing track.
+    """
+
+    archive_set = set(archive_tracks)
+
+    # Creamy tracks in historical order.
+    desired = list(archive_tracks)
+
+    # Preserve anything else already in the playlist.
+    #
+    # We don't know a historical Creamy date for these, so
+    # leave them after the Creamy archive in their current
+    # relative order.
+    extras = [
+        track_id
+        for track_id in current_tracks
+        if track_id not in archive_set
+    ]
+
+    desired.extend(extras)
+
+    return desired
+
+
+# ============================================================
+# REORDER PLAYLIST
+# ============================================================
+
+def reorder_playlist(
+    current_tracks,
+    desired_tracks,
+    access_token,
+):
+    """
+    Reorder the playlist using Spotify's range/insertion API.
+
+    We do NOT replace or delete the playlist contents.
+
+    Algorithm:
+
+        For each desired position:
+            - If the correct track is already there, do nothing.
+            - Otherwise find the desired track later in the
+              current playlist.
+            - Move that track to the desired position.
+
+    This produces the requested ordering while preserving
+    the actual playlist items.
+    """
+
+    if current_tracks == desired_tracks:
+        print("Playlist is already in the correct order.")
+        return
+
+    print()
+    print("Calculating playlist reorder...")
+    print(
+        f"Current items: {len(current_tracks)}"
+    )
+    print(
+        f"Desired items: {len(desired_tracks)}"
+    )
+
+    # Work on a local representation of the playlist.
+    current = list(current_tracks)
+
+    snapshot_id = get_playlist_snapshot(
+        access_token
+    )
+
+    moves = 0
+
+    for target_position in range(len(desired_tracks)):
+        desired_track = desired_tracks[target_position]
+
+        # Already correct.
+        if current[target_position] == desired_track:
+            continue
+
+        # Find the desired track later in the playlist.
+        try:
+            current_position = current.index(
+                desired_track,
+                target_position + 1,
+            )
+
+        except ValueError:
+            # This should not happen because desired_tracks
+            # was constructed from the current playlist plus
+            # the archive.
+            print(
+                f"WARNING: Could not find "
+                f"{desired_track} in playlist."
+            )
+            continue
+
+        print(
+            f"Move #{moves + 1}: "
+            f"position {current_position} "
+            f"→ {target_position}"
+        )
+
+        # Spotify's API uses:
+        #
+        # range_start   = current position
+        # range_length  = number of items to move
+        # insert_before = destination position
+        #
+        # We move exactly one item.
+        response = spotify_request(
+            "PUT",
+            f"https://api.spotify.com/v1/"
+            f"playlists/{DEST_PLAYLIST_ID}/items",
+            access_token,
+            json={
+                "range_start": current_position,
+                "insert_before": target_position,
+                "range_length": 1,
+                "snapshot_id": snapshot_id,
+            },
+        )
+
+        # Spotify returns the new snapshot ID.
+        snapshot_id = response.json()["snapshot_id"]
+
+        # Update our local representation so subsequent
+        # calculations are based on the playlist's new order.
+        track = current.pop(current_position)
+
+        current.insert(
+            target_position,
+            track,
+        )
+
+        moves += 1
+
+    print()
+    print(
+        f"Playlist reordered using {moves} move(s)."
+    )
 
 
 # ============================================================
@@ -345,14 +504,14 @@ def main():
     print()
 
     # --------------------------------------------------------
-    # 1. Get every track ever seen in Creamy,
-    #    sorted by original Added date.
+    # 1. Get every track ever seen in Creamy.
+    #    Sorted oldest → newest.
     # --------------------------------------------------------
 
     archive_tracks = get_archive_tracks()
 
     # --------------------------------------------------------
-    # 2. Authenticate
+    # 2. Authenticate.
     # --------------------------------------------------------
 
     print("Refreshing Spotify access token...")
@@ -360,38 +519,66 @@ def main():
     access_token = get_access_token()
 
     # --------------------------------------------------------
-    # 3. Get tracks already in your playlist
+    # 3. Read the current playlist.
     # --------------------------------------------------------
 
-    existing_tracks = get_existing_tracks(
+    existing_tracks = get_playlist_items(
         access_token
     )
 
     # --------------------------------------------------------
-    # 4. Find tracks we haven't added yet.
+    # 4. Add anything missing.
     #
-    # Because archive_tracks is chronological, new tracks
-    # will also be added chronologically.
+    # New tracks are temporarily appended. They will be
+    # reordered into their historical Creamy position below.
     # --------------------------------------------------------
 
-    new_tracks = [
-        track_id
-        for track_id in archive_tracks
-        if track_id not in existing_tracks
-    ]
+    add_missing_tracks(
+        archive_tracks,
+        existing_tracks,
+        access_token,
+    )
+
+    # --------------------------------------------------------
+    # 5. Re-read the playlist.
+    #
+    # This is important because the playlist has potentially
+    # changed after adding tracks.
+    # --------------------------------------------------------
+
+    current_tracks = get_playlist_items(
+        access_token
+    )
+
+    # --------------------------------------------------------
+    # 6. Compute exactly what the playlist should look like.
+    # --------------------------------------------------------
+
+    desired_tracks = compute_desired_order(
+        archive_tracks,
+        current_tracks,
+    )
 
     print()
-    print(f"Archive:        {len(archive_tracks)} tracks")
-    print(f"Already added:  {len(existing_tracks)} tracks")
-    print(f"New:            {len(new_tracks)} tracks")
-    print()
+    print(
+        f"Archive:        {len(archive_tracks)} tracks"
+    )
+    print(
+        f"Playlist:       {len(current_tracks)} tracks"
+    )
+    print(
+        f"Desired order:  {len(desired_tracks)} tracks"
+    )
 
     # --------------------------------------------------------
-    # 5. Append them in original Creamy order.
+    # 7. Reorder using Spotify's move API.
+    #
+    # Nothing is removed or replaced.
     # --------------------------------------------------------
 
-    add_tracks(
-        new_tracks,
+    reorder_playlist(
+        current_tracks,
+        desired_tracks,
         access_token,
     )
 
