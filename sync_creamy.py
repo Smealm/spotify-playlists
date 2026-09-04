@@ -1,6 +1,8 @@
+```python
 import os
 import re
 import time
+from datetime import datetime
 
 import requests
 
@@ -95,31 +97,145 @@ def get_archive_tracks():
 
     markdown = response.text
 
-    # Match ONLY Spotify track URLs.
+    # --------------------------------------------------------
+    # The cumulative archive is a Markdown table:
     #
-    # Example:
+    # | Title | Artist(s) | Album | Length | Added | Removed |
     #
-    # https://open.spotify.com/track/6JeDB7vnShGrxmpBT3thpY
+    # We extract:
     #
-    # Result:
+    #   Spotify track ID
+    #   Added date
     #
-    # 6JeDB7vnShGrxmpBT3thpY
+    # Then sort by Added date so the tracks are returned in
+    # the same chronological order in which they were added
+    # to Creamy.
+    # --------------------------------------------------------
 
-    pattern = re.compile(
+    track_rows = []
+
+    track_pattern = re.compile(
         r"https://open\.spotify\.com/track/"
         r"([A-Za-z0-9]+)"
     )
 
-    track_ids = pattern.findall(markdown)
+    for line in markdown.splitlines():
+        line = line.strip()
 
-    # Remove duplicate track IDs while preserving
-    # the order in which they appear in the archive.
-    track_ids = list(dict.fromkeys(track_ids))
+        # Only process Markdown table rows.
+        if not line.startswith("|"):
+            continue
+
+        # Extract the Spotify track ID.
+        match = track_pattern.search(line)
+
+        if not match:
+            continue
+
+        track_id = match.group(1)
+
+        # Split the Markdown table row into columns.
+        columns = [
+            column.strip()
+            for column in line.strip("|").split("|")
+        ]
+
+        # We expect:
+        #
+        # 0 = Title
+        # 1 = Artist(s)
+        # 2 = Album
+        # 3 = Length
+        # 4 = Added
+        # 5 = Removed
+        #
+        if len(columns) < 5:
+            continue
+
+        added_string = columns[4]
+
+        # Ignore the table header/separator.
+        if added_string.lower() == "added":
+            continue
+
+        if set(added_string) <= {"-", ":"}:
+            continue
+
+        # Try to parse the Added date.
+        #
+        # The archive uses dates such as:
+        #
+        # 2021-12-21
+        #
+        # If the date can't be parsed, put the track at the
+        # end rather than crashing the entire sync.
+        try:
+            added_date = datetime.strptime(
+                added_string,
+                "%Y-%m-%d",
+            )
+        except ValueError:
+            print(
+                f"Warning: couldn't parse Added date "
+                f"'{added_string}' for track {track_id}"
+            )
+
+            added_date = datetime.max
+
+        track_rows.append(
+            {
+                "track_id": track_id,
+                "added": added_date,
+            }
+        )
+
+    # --------------------------------------------------------
+    # Sort chronologically:
+    #
+    # oldest Added date → newest Added date
+    # --------------------------------------------------------
+
+    track_rows.sort(
+        key=lambda row: row["added"]
+    )
+
+    # --------------------------------------------------------
+    # Remove duplicate track IDs while preserving the
+    # chronological order.
+    # --------------------------------------------------------
+
+    seen = set()
+    track_ids = []
+
+    for row in track_rows:
+        track_id = row["track_id"]
+
+        if track_id in seen:
+            continue
+
+        seen.add(track_id)
+        track_ids.append(track_id)
 
     print(
         f"Found {len(track_ids)} unique tracks "
-        f"in the archive."
+        f"in chronological order."
     )
+
+    if track_ids:
+        print(
+            f"First added: {track_rows[0]['added'].date()}"
+        )
+
+        valid_dates = [
+            row["added"]
+            for row in track_rows
+            if row["added"] != datetime.max
+        ]
+
+        if valid_dates:
+            print(
+                f"Last added:  {max(valid_dates).date()}"
+            )
 
     return track_ids
 
@@ -230,7 +346,8 @@ def main():
     print()
 
     # --------------------------------------------------------
-    # 1. Get every track ever seen in Creamy
+    # 1. Get every track ever seen in Creamy,
+    #    sorted by original Added date.
     # --------------------------------------------------------
 
     archive_tracks = get_archive_tracks()
@@ -252,7 +369,10 @@ def main():
     )
 
     # --------------------------------------------------------
-    # 4. Find tracks we haven't added yet
+    # 4. Find tracks we haven't added yet.
+    #
+    # Because archive_tracks is chronological, new tracks
+    # will also be added chronologically.
     # --------------------------------------------------------
 
     new_tracks = [
@@ -268,7 +388,7 @@ def main():
     print()
 
     # --------------------------------------------------------
-    # 5. Append them
+    # 5. Append them in original Creamy order.
     # --------------------------------------------------------
 
     add_tracks(
@@ -282,3 +402,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+```
