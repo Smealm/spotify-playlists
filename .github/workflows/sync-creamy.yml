@@ -30,6 +30,6 @@ jobs:
           SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
           SPOTIFY_REFRESH_TOKEN: ${{ secrets.SPOTIFY_REFRESH_TOKEN }}
         run: |
-          python archive_playlist.py \
+          python sync_creamy.py \
             --archive-url "https://raw.githubusercontent.com/mackorone/spotify-playlist-archive-2/refs/heads/main/playlists/cumulative/37i9dQZF1DXdgz8ZB7c2CP.md" \
             --destination-playlist-id "0d9fkV0DPxsq5Ag7IP8obL"
