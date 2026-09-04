@@ -30,6 +30,17 @@ A permanent archive containing every song that has ever appeared in the Creamy p
 
 ---
 
+# Inspiration / Motivation
+
+This project is about creating **more complete Spotify playlists**.
+
+Each playlist in this repo contains the **full official Spotify playlist history** of whatever playlists are being archived, rather than being limited to the songs currently in rotation.
+
+It started with me wanting a **full Creamy playlist discography** to shuffle through instead of being limited to the current 100-song curation. I wanted the historical curation.
+
+
+---
+
 # How It Works
 
 Using **Creamy** as an example, the process works in a few stages.
