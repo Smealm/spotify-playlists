@@ -1,0 +1,52 @@
+name: Sync Brain Food Playlist
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 16 * * *"
+
+jobs:
+  sync-brain-food:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests
+
+      - name: Sync Brain Food archive
+        env:
+          SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
+          SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
+          SPOTIFY_REFRESH_TOKEN: ${{ secrets.SPOTIFY_REFRESH_TOKEN }}
+        run: |
+          python archive-playlists.py \
+            --archive-playlist-id "37i9dQZF1DWXLeA8Omikj7" \
+            --destination-playlist-id "5Hcbss2XBcioA7GEGM0yOf" \
+            --log "/logs/brain-food-output.txt"
+
+      - name: Commit updated log
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add logs/brain-food-output.txt
+
+          if git diff --cached --quiet; then
+            echo "No log changes to commit."
+          else
+            git commit -m "Update Brain Food sync log"
+            git push
+          fi
