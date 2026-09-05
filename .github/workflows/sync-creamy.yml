@@ -2,13 +2,15 @@ name: Archive Creamy Playlist
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: "0 16 * * *"
 
 jobs:
   archive-creamy:
     runs-on: ubuntu-latest
 
     permissions:
-      contents: read
+      contents: write
 
     steps:
       - name: Checkout repository
@@ -30,6 +32,21 @@ jobs:
           SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
           SPOTIFY_REFRESH_TOKEN: ${{ secrets.SPOTIFY_REFRESH_TOKEN }}
         run: |
-          python sync_creamy.py \
-            --archive-url "https://raw.githubusercontent.com/mackorone/spotify-playlist-archive-2/refs/heads/main/playlists/cumulative/37i9dQZF1DXdgz8ZB7c2CP.md" \
-            --destination-playlist-id "0d9fkV0DPxsq5Ag7IP8obL"
+          python archive-playlists.py \
+            --archive-playlist-id "37i9dQZF1DXdgz8ZB7c2CP" \
+            --destination-playlist-id "0d9fkV0DPxsq5Ag7IP8obL" \
+            --log "/logs/creamy-output.txt"
+
+      - name: Commit updated log
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add logs/creamy-output.txt
+
+          if git diff --cached --quiet; then
+            echo "No log changes to commit."
+          else
+            git commit -m "Update Creamy archive log"
+            git push
+          fi
