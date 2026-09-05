@@ -1,4 +1,4 @@
-name: Archive Creamy Playlist
+name: Sync Creamy Playlist
 
 on:
   workflow_dispatch:
