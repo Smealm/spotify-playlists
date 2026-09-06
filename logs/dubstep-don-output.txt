@@ -4,21 +4,21 @@ Dedup-style importer
 Newest → Oldest ordering
 
 Archive tracks detected: 1583
-Exact duplicates skipped: 1561
+Exact duplicates skipped: 1567
 Fuzzy duplicates skipped: 16
 Missing metadata skipped: 0
-Tracks initially identified as new: 6
-Tracks actually added: 6
+Tracks initially identified as new: 0
+Tracks actually added: 0
 Final duplicate check skipped: 0
-Total skipped during run: 1577
+Total skipped during run: 1583
 
 ============================================================
 SUMMARY
 ============================================================
 Archive tracks:       1583
 Playlist tracks:      1567
-New tracks added:     6
+New tracks added:     0
 Desired playlist:     1567
 Ordering:             NEWEST → OLDEST
-Reorder moves:        7
-Reorder duration:     1.84 seconds
+Reorder moves:        0
+Reorder duration:     0.00 seconds
