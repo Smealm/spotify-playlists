@@ -520,9 +520,29 @@ def get_archive_tracks():
         if set(added_string) <= {"-", ":"}:
             continue
 
+        # ----------------------------------------------------
+        # FIX:
+        #
+        # The cumulative archive can contain Markdown
+        # footnote markers after dates, for example:
+        #
+        #     2019-06-19\*
+        #
+        #     2019-06-19*
+        #
+        # Strip the optional backslash + asterisk marker
+        # before parsing the date.
+        # ----------------------------------------------------
+
+        cleaned_added_string = re.sub(
+            r"\\?\*$",
+            "",
+            added_string,
+        ).strip()
+
         try:
             added_date = datetime.strptime(
-                added_string,
+                cleaned_added_string,
                 "%Y-%m-%d",
             )
 
@@ -671,6 +691,9 @@ class TrackMetadataCache:
 
     Any later request for the same track reuses the cached
     metadata.
+
+    The cache exists only in memory and is discarded when
+    the script exits. Nothing is persisted between runs.
     """
 
     def __init__(self):
