@@ -2,7 +2,9 @@ name: Sync Brain Food Playlist
 
 on:
   workflow_dispatch:
+
   schedule:
+    # 16:00 UTC every day
     - cron: "0 16 * * *"
 
 jobs:
@@ -35,7 +37,7 @@ jobs:
           python archive-playlists.py \
             --archive-playlist-id "37i9dQZF1DWXLeA8Omikj7" \
             --destination-playlist-id "5Hcbss2XBcioA7GEGM0yOf" \
-            --log "/logs/brain-food-output.txt"
+            --log "logs/brain-food-output.txt"
 
       - name: Commit updated log
         run: |
