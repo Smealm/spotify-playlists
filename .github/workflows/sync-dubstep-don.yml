@@ -2,7 +2,9 @@ name: Sync Dubstep Don Playlist
 
 on:
   workflow_dispatch:
+
   schedule:
+    # 16:00 UTC every day
     - cron: "0 16 * * *"
 
 jobs:
@@ -35,7 +37,7 @@ jobs:
           python archive-playlists.py \
             --archive-playlist-id "37i9dQZF1DX5Q27plkaOQ3" \
             --destination-playlist-id "6jFdULRcOzcsNJoHLU136C" \
-            --log "/logs/dubstep-don-output.txt"
+            --log "logs/dubstep-don-output.txt"
 
       - name: Commit updated log
         run: |
