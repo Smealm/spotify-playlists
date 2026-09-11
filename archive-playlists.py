@@ -2,9 +2,7 @@ import argparse
 import os
 import re
 import time
-import unicodedata
 from datetime import datetime
-from difflib import SequenceMatcher
 from pathlib import Path
 
 import requests
@@ -22,15 +20,6 @@ ARCHIVE_URL = (
 
 DRY_RUN = False
 
-TITLE_THRESHOLD = 0.92
-ARTIST_THRESHOLD = 0.92
-DURATION_TOLERANCE = 5
-
-# If more than this many positions are wrong, rebuilding the
-# playlist is substantially faster than individual reordering.
-REBUILD_MISMATCH_THRESHOLD = 100
-
-# Spotify allows a maximum of 100 URIs in add/replace requests.
 BATCH_SIZE = 100
 
 
@@ -61,8 +50,14 @@ def parse_args():
 
 ARGS = parse_args()
 
+# The archive playlist ID is also the live/main Spotify
+# playlist ID by design.
 ARCHIVE_PLAYLIST_ID = ARGS.archive_playlist_id
-DESTINATION_PLAYLIST_ID = ARGS.destination_playlist_id
+
+DESTINATION_PLAYLIST_ID = (
+    ARGS.destination_playlist_id
+)
+
 LOG_PATH = ARGS.log
 
 PROJECT_DIR = Path(__file__).resolve().parent
@@ -76,15 +71,20 @@ def resolve_log_path(value):
     value = str(value).strip().lstrip("/\\")
 
     if not value:
-        raise ValueError("--log cannot be empty")
+        raise ValueError(
+            "--log cannot be empty"
+        )
 
-    path = (PROJECT_DIR / value).resolve()
+    path = (
+        PROJECT_DIR / value
+    ).resolve()
 
     try:
         path.relative_to(PROJECT_DIR)
     except ValueError:
         raise ValueError(
-            "--log must stay inside the project directory"
+            "--log must stay inside "
+            "the project directory"
         )
 
     return path
@@ -109,7 +109,9 @@ class Logger:
             encoding="utf-8",
         )
 
-        print(f"Log written to {self.path}")
+        print(
+            f"Log written to {self.path}"
+        )
 
 
 LOGGER = Logger(LOG_PATH)
@@ -119,15 +121,25 @@ LOGGER = Logger(LOG_PATH)
 # SPOTIFY
 # ============================================================
 
-CLIENT_ID = os.environ["SPOTIFY_CLIENT_ID"]
-CLIENT_SECRET = os.environ["SPOTIFY_CLIENT_SECRET"]
-REFRESH_TOKEN = os.environ["SPOTIFY_REFRESH_TOKEN"]
+CLIENT_ID = os.environ[
+    "SPOTIFY_CLIENT_ID"
+]
+
+CLIENT_SECRET = os.environ[
+    "SPOTIFY_CLIENT_SECRET"
+]
+
+REFRESH_TOKEN = os.environ[
+    "SPOTIFY_REFRESH_TOKEN"
+]
 
 API = "https://api.spotify.com/v1"
 
 
 def get_access_token():
-    print("Refreshing Spotify token...")
+    print(
+        "Refreshing Spotify token..."
+    )
 
     response = requests.post(
         "https://accounts.spotify.com/api/token",
@@ -144,7 +156,9 @@ def get_access_token():
 
     response.raise_for_status()
 
-    return response.json()["access_token"]
+    return response.json()[
+        "access_token"
+    ]
 
 
 def spotify_request(
@@ -153,7 +167,10 @@ def spotify_request(
     token,
     **kwargs,
 ):
-    headers = kwargs.pop("headers", {})
+    headers = kwargs.pop(
+        "headers",
+        {},
+    )
 
     headers["Authorization"] = (
         f"Bearer {token}"
@@ -169,22 +186,20 @@ def spotify_request(
         )
 
         if response.status_code == 429:
-            retry_after_header = (
-                response.headers.get(
-                    "Retry-After",
-                    "5",
-                )
+            retry_after = response.headers.get(
+                "Retry-After",
+                "5",
             )
 
             try:
                 retry_after = int(
-                    retry_after_header
+                    retry_after
                 )
             except ValueError:
                 retry_after = 5
 
             print(
-                f"Spotify rate limit. "
+                "Spotify rate limited. "
                 f"Waiting {retry_after}s..."
             )
 
@@ -199,148 +214,6 @@ def spotify_request(
     raise RuntimeError(
         "Spotify rate limit persisted "
         "after 5 retries."
-    )
-
-
-# ============================================================
-# TEXT / MATCHING
-# ============================================================
-
-def normalize_text(value):
-    if not value:
-        return ""
-
-    value = unicodedata.normalize(
-        "NFKD",
-        value,
-    )
-
-    value = "".join(
-        c
-        for c in value
-        if not unicodedata.combining(c)
-    )
-
-    value = value.lower()
-
-    value = value.replace(
-        "&",
-        " and ",
-    )
-
-    value = re.sub(
-        r"\b(feat\.?|ft\.?|featuring)\b",
-        " ",
-        value,
-    )
-
-    value = re.sub(
-        r"[^a-z0-9]+",
-        " ",
-        value,
-    )
-
-    value = re.sub(
-        r"\s+",
-        " ",
-        value,
-    )
-
-    return value.strip()
-
-
-def artists_text(track):
-    return " ".join(
-        normalize_text(
-            artist.get("name", "")
-        )
-        for artist in track.get(
-            "artists",
-            [],
-        )
-        if artist.get("name")
-    ).strip()
-
-
-def artists_text_from_candidate(track):
-    return normalize_text(
-        track.get(
-            "artist",
-            "",
-        )
-    )
-
-
-def similarity(a, b):
-    return SequenceMatcher(
-        None,
-        normalize_text(a),
-        normalize_text(b),
-    ).ratio()
-
-
-def duplicate(candidate, existing):
-    if not candidate or not existing:
-        return False
-
-    candidate_id = candidate.get(
-        "track_id"
-    )
-
-    existing_id = existing.get(
-        "id"
-    )
-
-    if (
-        candidate_id
-        and candidate_id == existing_id
-    ):
-        return True
-
-    title_score = similarity(
-        candidate.get(
-            "title",
-            "",
-        ),
-        existing.get(
-            "name",
-            "",
-        ),
-    )
-
-    if title_score < TITLE_THRESHOLD:
-        return False
-
-    artist_score = SequenceMatcher(
-        None,
-        artists_text_from_candidate(
-            candidate
-        ),
-        artists_text(existing),
-    ).ratio()
-
-    if artist_score < ARTIST_THRESHOLD:
-        return False
-
-    candidate_seconds = candidate.get(
-        "duration",
-        0,
-    )
-
-    existing_seconds = (
-        existing.get(
-            "duration_ms",
-            0,
-        )
-        / 1000
-    )
-
-    return (
-        abs(
-            candidate_seconds
-            - existing_seconds
-        )
-        <= DURATION_TOLERANCE
     )
 
 
@@ -459,7 +332,8 @@ def read_archive():
         key=lambda track: track["added"]
     )
 
-    # Remove duplicate Spotify IDs.
+    # Deduplicate archive by exact
+    # Spotify track ID.
     seen = set()
     result = []
 
@@ -471,7 +345,6 @@ def read_archive():
             continue
 
         seen.add(track_id)
-
         result.append(track)
 
     print(
@@ -483,17 +356,21 @@ def read_archive():
 
 
 # ============================================================
-# DESTINATION PLAYLIST
+# SPOTIFY PLAYLIST ITEMS
 # ============================================================
 
-def get_playlist_items(token):
+def get_playlist_items(
+    token,
+    playlist_id,
+    label="playlist",
+):
     print(
-        "Reading destination playlist..."
+        f"Reading {label}..."
     )
 
     url = (
         f"{API}/playlists/"
-        f"{DESTINATION_PLAYLIST_ID}/items"
+        f"{playlist_id}/items"
     )
 
     params = {
@@ -504,9 +381,7 @@ def get_playlist_items(token):
             "id,"
             "type,"
             "uri,"
-            "name,"
-            "artists,"
-            "duration_ms"
+            "name"
             ")"
             "),"
             "next"
@@ -549,9 +424,11 @@ def get_playlist_items(token):
             ) != "track":
                 continue
 
-            if not track.get(
+            track_id = track.get(
                 "id"
-            ):
+            )
+
+            if not track_id:
                 continue
 
             tracks.append(track)
@@ -565,12 +442,10 @@ def get_playlist_items(token):
             "next"
         )
 
-        # `next` already contains
-        # the query parameters.
         params = None
 
     print(
-        f"Destination playlist contains "
+        f"{label.capitalize()} contains "
         f"{len(tracks)} tracks."
     )
 
@@ -578,210 +453,329 @@ def get_playlist_items(token):
 
 
 # ============================================================
-# DUPLICATE DETECTION
+# DEDUPLICATION
 # ============================================================
 
-def find_duplicate(
-    candidate,
-    existing_tracks,
-):
-    candidate_id = candidate[
-        "track_id"
-    ]
+def find_duplicate_items(tracks):
+    """
+    Spotify-Dedup-style detection.
 
-    # Fast path: exact Spotify ID.
-    for track in existing_tracks:
+    A duplicate is determined ONLY by the
+    exact Spotify track ID.
 
-        if track.get("id") == candidate_id:
-            return track, "exact"
+    The first occurrence is kept.
 
-    # Slower fuzzy comparison.
-    for track in existing_tracks:
+    This intentionally does NOT use:
+      - title similarity
+      - artist similarity
+      - duration similarity
+      - album similarity
+    """
 
-        if duplicate(
-            candidate,
-            track,
-        ):
-            return track, "fuzzy"
+    seen_ids = set()
+    unique_tracks = []
+    duplicate_tracks = []
 
-    return None, None
-
-
-def determine_new_tracks(
-    archive,
-    existing,
-):
-    new_tracks = []
-
-    exact = 0
-    fuzzy = 0
-
-    # Maps archive Spotify ID to the
-    # actual destination Spotify ID.
-    #
-    # Normally they are identical.
-    # For fuzzy matches they can differ.
-    destination_mapping = {}
-
-    # Keep a working list so that two
-    # archive tracks don't both get
-    # classified as new when the first
-    # one has already been accepted.
-    comparison_tracks = list(
-        existing
-    )
-
-    print(
-        "Comparing archive with "
-        "destination..."
-    )
-
-    for index, candidate in enumerate(
-        archive,
-        start=1,
+    for position, track in enumerate(
+        tracks
     ):
 
-        match, match_type = (
-            find_duplicate(
-                candidate,
-                comparison_tracks,
-            )
+        track_id = track.get(
+            "id"
         )
 
-        if match:
+        if not track_id:
+            continue
 
-            destination_mapping[
-                candidate["track_id"]
-            ] = match["id"]
+        if track_id in seen_ids:
 
-            if match_type == "exact":
-                exact += 1
-            else:
-                fuzzy += 1
-
-        else:
-
-            new_tracks.append(
-                candidate
-            )
-
-            destination_mapping[
-                candidate["track_id"]
-            ] = candidate["track_id"]
-
-            # Add a synthetic track to the
-            # comparison list so duplicates
-            # inside the archive are avoided.
-            comparison_tracks.append(
+            duplicate_tracks.append(
                 {
-                    "id": candidate[
-                        "track_id"
-                    ],
-                    "name": candidate[
-                        "title"
-                    ],
-                    "artists": [
-                        {
-                            "name": candidate[
-                                "artist"
-                            ]
-                        }
-                    ],
-                    "duration_ms": (
-                        candidate[
-                            "duration"
-                        ]
-                        * 1000
-                    ),
+                    "position": position,
+                    "track": track,
                 }
             )
 
-        if (
-            index % 250 == 0
-            or index == len(archive)
-        ):
-            print(
-                f"  Compared "
-                f"{index}/{len(archive)}"
-            )
+            continue
 
-    print()
-    print(
-        f"Exact duplicates: {exact}"
-    )
-
-    print(
-        f"Fuzzy duplicates: {fuzzy}"
-    )
-
-    print(
-        f"New tracks:       "
-        f"{len(new_tracks)}"
-    )
+        seen_ids.add(track_id)
+        unique_tracks.append(track)
 
     return (
-        new_tracks,
-        exact,
-        fuzzy,
-        destination_mapping,
+        unique_tracks,
+        duplicate_tracks,
     )
 
 
+def report_duplicates(
+    duplicate_tracks,
+):
+    count = len(
+        duplicate_tracks
+    )
+
+    if count == 0:
+        print(
+            "Deduplication: no duplicates found."
+        )
+
+        return
+
+    print(
+        f"Deduplication: found "
+        f"{count} duplicate item(s)."
+    )
+
+    for item in duplicate_tracks[
+        :20
+    ]:
+
+        position = item[
+            "position"
+        ]
+
+        track = item[
+            "track"
+        ]
+
+        print(
+            f"  Duplicate at position "
+            f"{position + 1}: "
+            f"{track.get('name', 'Unknown')} "
+            f"({track.get('id')})"
+        )
+
+    if count > 20:
+        print(
+            f"  ...and {count - 20} more."
+        )
+
+
 # ============================================================
-# ADD NEW TRACKS
+# DESIRED ORDER
 # ============================================================
 
-def add_tracks_at_front(
-    tracks,
+def build_desired_order(
+    main_playlist,
+    archive,
+    destination_unique,
+):
+    """
+    Build the final archive playlist order.
+
+    Priority:
+
+        1. Current live/main Spotify playlist
+           in EXACTLY its current order.
+
+        2. Historical archive tracks that are
+           no longer in the main playlist,
+           newest -> oldest.
+
+        3. Any destination-only tracks that
+           exist outside the archive/main playlist,
+           preserving their current order.
+
+    Every Spotify track ID appears at most once.
+
+    Example:
+
+        MAIN PLAYLIST
+        A
+        B
+        C
+
+        ARCHIVE
+        Z
+        Y
+        C
+        B
+        A
+
+        DESTINATION-ONLY
+        X
+
+        Result:
+
+        A
+        B
+        C
+        Z
+        Y
+        X
+    """
+
+    desired = []
+    used = set()
+
+    # --------------------------------------------------------
+    # Tier 1:
+    #
+    # Current live playlist order.
+    #
+    # This is the most important part. The archive should
+    # visually match the real Spotify playlist at the top.
+    # --------------------------------------------------------
+
+    for track in main_playlist:
+
+        track_id = track.get(
+            "id"
+        )
+
+        if not track_id:
+            continue
+
+        if track_id in used:
+            continue
+
+        desired.append(
+            track_id
+        )
+
+        used.add(
+            track_id
+        )
+
+    main_ids = set(used)
+
+    print(
+        f"Main playlist section: "
+        f"{len(main_ids)} unique tracks."
+    )
+
+    # --------------------------------------------------------
+    # Tier 2:
+    #
+    # Historical archive.
+    #
+    # Archive is stored oldest -> newest, so reverse it
+    # to produce newest -> oldest.
+    #
+    # Anything already present in the main playlist is
+    # skipped because it already exists in tier 1.
+    # --------------------------------------------------------
+
+    historical_added = 0
+
+    for track in reversed(archive):
+
+        track_id = track[
+            "track_id"
+        ]
+
+        if track_id in used:
+            continue
+
+        desired.append(
+            track_id
+        )
+
+        used.add(
+            track_id
+        )
+
+        historical_added += 1
+
+    print(
+        f"Historical section: "
+        f"{historical_added} tracks."
+    )
+
+    # --------------------------------------------------------
+    # Tier 3:
+    #
+    # Preserve anything already in the destination playlist
+    # that isn't represented by the live playlist or archive.
+    #
+    # This prevents unrelated/custom destination tracks
+    # from disappearing during a rebuild.
+    # --------------------------------------------------------
+
+    destination_only_added = 0
+
+    for track in destination_unique:
+
+        track_id = track.get(
+            "id"
+        )
+
+        if not track_id:
+            continue
+
+        if track_id in used:
+            continue
+
+        desired.append(
+            track_id
+        )
+
+        used.add(
+            track_id
+        )
+
+        destination_only_added += 1
+
+    if destination_only_added:
+        print(
+            f"Destination-only section: "
+            f"{destination_only_added} tracks."
+        )
+
+    print(
+        f"Desired playlist contains "
+        f"{len(desired)} unique tracks."
+    )
+
+    return desired
+
+
+# ============================================================
+# ADD NEW ARCHIVE TRACKS
+# ============================================================
+
+def add_new_tracks(
+    new_tracks,
     token,
 ):
     """
-    Add new tracks to the beginning of
-    the playlist in newest -> oldest order.
+    Add newly discovered archive tracks.
 
-    This is important for future runs:
-    new archive tracks naturally land at
-    the front, so the playlist doesn't need
-    a massive reorder every day.
+    This is retained for incremental updates.
+
+    The final ordering is handled afterward by the
+    main/historical ordering logic.
+
+    Spotify accepts a maximum of 100 items
+    per add request.
     """
 
-    if not tracks:
-        return 0
-
-    if DRY_RUN:
+    if not new_tracks:
         print(
-            f"DRY RUN: would add "
-            f"{len(tracks)} tracks."
+            "No new archive tracks to add."
         )
 
-        return len(tracks)
+        return 0
 
-    # Archive is oldest -> newest.
-    #
-    # We want newest -> oldest at the
-    # beginning of the destination.
     ordered = list(
-        reversed(tracks)
+        reversed(new_tracks)
     )
 
     total = len(ordered)
 
+    if DRY_RUN:
+        print(
+            f"DRY RUN: would add "
+            f"{total} tracks."
+        )
+
+        return total
+
     print(
-        f"Adding {total} new tracks "
-        f"to the front..."
+        f"Adding {total} new archive "
+        f"track(s)..."
     )
 
-    added = 0
-
-    # We process from newest -> oldest.
-    #
-    # Every batch is inserted at position 0.
-    # To preserve the overall newest ->
-    # oldest order, batches themselves need
-    # to be inserted carefully.
-    #
-    # Easiest safe approach:
-    # add all batches in reverse batch order.
     batches = [
         ordered[
             start:start + BATCH_SIZE
@@ -793,10 +787,17 @@ def add_tracks_at_front(
         )
     ]
 
-    for batch_number, batch in enumerate(
-        reversed(batches),
-        start=1,
-    ):
+    added = 0
+
+    # Insert older batches first.
+    #
+    # Then insert newer batches at position 0.
+    #
+    # This preserves newest -> oldest ordering
+    # for the newly added tracks until the final
+    # ordering pass runs.
+
+    for batch in reversed(batches):
 
         uris = [
             f"spotify:track:{track['track_id']}"
@@ -821,118 +822,14 @@ def add_tracks_at_front(
 
         print(
             f"  Added "
-            f"{added}/{total} new tracks"
+            f"{added}/{total}"
         )
 
     return added
 
 
 # ============================================================
-# DESIRED ORDER
-# ============================================================
-
-def build_desired_order(
-    archive,
-    current,
-    destination_mapping,
-):
-    """
-    Desired order:
-
-        archive tracks newest -> oldest
-        followed by any tracks that aren't
-        represented by the archive.
-
-    This preserves the permanent-playlist
-    behavior while keeping unrelated tracks
-    at the end.
-    """
-
-    desired = []
-
-    used_destination_ids = set()
-
-    # Newest -> oldest.
-    for candidate in reversed(
-        archive
-    ):
-
-        archive_id = candidate[
-            "track_id"
-        ]
-
-        destination_id = (
-            destination_mapping.get(
-                archive_id
-            )
-        )
-
-        if not destination_id:
-            continue
-
-        if destination_id in (
-            used_destination_ids
-        ):
-            continue
-
-        desired.append(
-            destination_id
-        )
-
-        used_destination_ids.add(
-            destination_id
-        )
-
-    # Preserve non-archive tracks after
-    # the archive tracks.
-    for track in current:
-
-        track_id = track.get(
-            "id"
-        )
-
-        if not track_id:
-            continue
-
-        if track_id in (
-            used_destination_ids
-        ):
-            continue
-
-        desired.append(
-            track_id
-        )
-
-        used_destination_ids.add(
-            track_id
-        )
-
-    return desired
-
-
-# ============================================================
-# ORDER ANALYSIS
-# ============================================================
-
-def count_mismatches(
-    current_ids,
-    desired_ids,
-):
-    length = min(
-        len(current_ids),
-        len(desired_ids),
-    )
-
-    return sum(
-        1
-        for index in range(length)
-        if current_ids[index]
-        != desired_ids[index]
-    )
-
-
-# ============================================================
-# PLAYLIST REBUILD
+# REBUILD PLAYLIST
 # ============================================================
 
 def rebuild_playlist(
@@ -940,26 +837,16 @@ def rebuild_playlist(
     token,
 ):
     """
-    Fast path for badly disordered playlists.
+    Rebuild the destination playlist in batches.
 
-    Spotify allows up to 100 URIs in a replace
-    request and up to 100 URIs in an add request.
+    First request:
+        replace playlist with first 100
 
-    We therefore:
+    Remaining requests:
+        append another 100 at a time.
 
-        1. Replace the playlist with the
-           first 100 desired tracks.
-        2. Append the remaining tracks in
-           100-track batches.
-
-    This is dramatically faster than issuing
-    one reorder request per track.
-
-    IMPORTANT:
-    If a later request fails, the playlist may
-    temporarily contain only part of the desired
-    list. Requests are retried by spotify_request,
-    but a hard failure still aborts the workflow.
+    This is dramatically faster than performing one
+    reorder request per track on large playlists.
     """
 
     if not desired_ids:
@@ -967,28 +854,27 @@ def rebuild_playlist(
             "Desired playlist is empty."
         )
 
+    total = len(
+        desired_ids
+    )
+
+    print()
+    print(
+        f"Rebuilding playlist with "
+        f"{total} unique items..."
+    )
+
     if DRY_RUN:
         print(
-            "DRY RUN: playlist would be "
-            "rebuilt."
+            "DRY RUN: playlist would be rebuilt."
         )
 
         return 0
 
-    total = len(desired_ids)
-
-    print()
-    print(
-        "Large reorder detected."
-    )
-
-    print(
-        f"Rebuilding {total} playlist items "
-        f"using 100-item batches..."
-    )
+    request_count = 0
 
     # --------------------------------------------------------
-    # First 100: replace the playlist.
+    # First 100: replace entire playlist.
     # --------------------------------------------------------
 
     first_batch = desired_ids[
@@ -1001,8 +887,8 @@ def rebuild_playlist(
     ]
 
     print(
-        f"  Replacing first "
-        f"{len(first_batch)} items..."
+        f"  Replacing playlist with "
+        f"items 1-{len(first_batch)}..."
     )
 
     spotify_request(
@@ -1016,6 +902,8 @@ def rebuild_playlist(
             "uris": first_uris,
         },
     )
+
+    request_count += 1
 
     completed = len(
         first_batch
@@ -1053,14 +941,15 @@ def rebuild_playlist(
             "POST",
             (
                 f"{API}/playlists/"
-                f"{DESTINATION_PLAYLIST_ID}"
-                f"/items"
+                f"{DESTINATION_PLAYLIST_ID}/items"
             ),
             token,
             json={
                 "uris": uris,
             },
         )
+
+        request_count += 1
 
         completed += len(batch)
 
@@ -1070,24 +959,15 @@ def rebuild_playlist(
         )
 
     print(
-        "Playlist rebuild complete."
+        f"Playlist rebuild complete "
+        f"using {request_count} request(s)."
     )
 
-    return (
-        1
-        + (
-            len(remaining)
-            + BATCH_SIZE
-            - 1
-        )
-        // BATCH_SIZE
-        if remaining
-        else 1
-    )
+    return request_count
 
 
 # ============================================================
-# SMALL REORDER
+# TARGETED SMALL REORDER
 # ============================================================
 
 def reorder_small(
@@ -1096,32 +976,25 @@ def reorder_small(
     token,
 ):
     """
-    For small changes, use Spotify's native
-    range reorder operation.
+    Used only when the playlist is already mostly correct.
 
-    This avoids rebuilding the whole playlist
-    when only a small number of positions differ.
+    Moves contiguous ranges instead of moving every track
+    individually.
     """
 
     if current_ids == desired_ids:
         print(
-            "Playlist is already correctly "
-            "ordered."
+            "Playlist is already correctly ordered."
         )
 
         return 0, 0.0
 
     if DRY_RUN:
         print(
-            "DRY RUN: playlist would be "
-            "reordered."
+            "DRY RUN: playlist would be reordered."
         )
 
         return 0, 0.0
-
-    print(
-        "Performing targeted reorder..."
-    )
 
     response = spotify_request(
         "GET",
@@ -1147,9 +1020,9 @@ def reorder_small(
 
     started = time.perf_counter()
 
-    total = len(desired_ids)
-
-    for target in range(total):
+    for target in range(
+        len(desired_ids)
+    ):
 
         wanted = desired_ids[
             target
@@ -1165,13 +1038,10 @@ def reorder_small(
             )
         except ValueError:
             raise RuntimeError(
-                "Desired track was not found "
-                "in the current playlist."
+                "Desired track not found "
+                "during reorder."
             )
 
-        # Extend the move into the longest
-        # contiguous desired block available
-        # at the source position.
         range_length = 1
 
         while (
@@ -1188,7 +1058,7 @@ def reorder_small(
         ):
             range_length += 1
 
-        spotify_response = spotify_request(
+        response = spotify_request(
             "PUT",
             (
                 f"{API}/playlists/"
@@ -1203,17 +1073,18 @@ def reorder_small(
             },
         )
 
-        snapshot = (
-            spotify_response.json()
-            ["snapshot_id"]
-        )
+        snapshot = response.json()[
+            "snapshot_id"
+        ]
 
         block = working[
-            source:source + range_length
+            source:
+            source + range_length
         ]
 
         del working[
-            source:source + range_length
+            source:
+            source + range_length
         ]
 
         working[
@@ -1223,9 +1094,8 @@ def reorder_small(
         moves += 1
 
         print(
-            f"  Reorder move "
-            f"{moves}: "
-            f"position {source} -> {target}, "
+            f"  Move {moves}: "
+            f"{source} -> {target}, "
             f"{range_length} item(s)"
         )
 
@@ -1236,15 +1106,15 @@ def reorder_small(
 
     print(
         f"Targeted reorder complete: "
-        f"{moves} move(s) in "
-        f"{duration:.2f}s."
+        f"{moves} move(s), "
+        f"{duration:.2f}s"
     )
 
     return moves, duration
 
 
 # ============================================================
-# VERIFY
+# VERIFICATION
 # ============================================================
 
 def verify_playlist(
@@ -1255,33 +1125,53 @@ def verify_playlist(
         "Verifying final playlist..."
     )
 
-    current = get_playlist_items(
-        token
+    final_tracks = get_playlist_items(
+        token,
+        DESTINATION_PLAYLIST_ID,
+        "final destination playlist",
     )
 
-    current_ids = [
+    final_ids = [
         track["id"]
-        for track in current
+        for track in final_tracks
     ]
 
-    if current_ids != desired_ids:
+    # --------------------------------------------------------
+    # Check exact order/content.
+    # --------------------------------------------------------
 
-        # Provide useful diagnostics.
-        mismatch_count = count_mismatches(
-            current_ids,
-            desired_ids,
-        )
+    if final_ids != desired_ids:
 
         raise RuntimeError(
-            "Playlist verification failed. "
-            f"{mismatch_count} positions differ."
+            "Playlist verification failed: "
+            "final order/content does not "
+            "match the desired playlist."
+        )
+
+    # --------------------------------------------------------
+    # Check duplicates.
+    # --------------------------------------------------------
+
+    if len(final_ids) != len(
+        set(final_ids)
+    ):
+
+        raise RuntimeError(
+            "Playlist verification failed: "
+            "duplicate Spotify track IDs "
+            "are still present."
         )
 
     print(
         "Playlist verification passed."
     )
 
-    return len(current)
+    print(
+        f"Final playlist contains "
+        f"{len(final_ids)} unique tracks."
+    )
+
+    return len(final_ids)
 
 
 # ============================================================
@@ -1290,14 +1180,17 @@ def verify_playlist(
 
 def write_summary(
     archive_count,
-    playlist_count,
-    exact,
-    fuzzy,
+    original_playlist_count,
+    unique_before_count,
+    duplicate_count,
+    main_playlist_count,
+    historical_count,
     new_count,
-    added,
+    added_count,
+    final_playlist_count,
+    rebuild_used,
     reorder_moves,
     reorder_duration,
-    rebuild_used,
 ):
     LOGGER.add(
         "=" * 60
@@ -1308,7 +1201,7 @@ def write_summary(
     )
 
     LOGGER.add(
-        "Newest -> Oldest"
+        "Main playlist order -> Historical archive"
     )
 
     LOGGER.add("")
@@ -1319,18 +1212,28 @@ def write_summary(
     )
 
     LOGGER.add(
-        f"Playlist tracks:      "
-        f"{playlist_count}"
+        f"Original playlist:    "
+        f"{original_playlist_count}"
     )
 
     LOGGER.add(
-        f"Exact duplicates:     "
-        f"{exact}"
+        f"Unique before dedup:  "
+        f"{unique_before_count}"
     )
 
     LOGGER.add(
-        f"Fuzzy duplicates:     "
-        f"{fuzzy}"
+        f"Duplicates removed:   "
+        f"{duplicate_count}"
+    )
+
+    LOGGER.add(
+        f"Main playlist tracks: "
+        f"{main_playlist_count}"
+    )
+
+    LOGGER.add(
+        f"Historical tracks:    "
+        f"{historical_count}"
     )
 
     LOGGER.add(
@@ -1340,7 +1243,12 @@ def write_summary(
 
     LOGGER.add(
         f"Tracks added:         "
-        f"{added}"
+        f"{added_count}"
+    )
+
+    LOGGER.add(
+        f"Final playlist:       "
+        f"{final_playlist_count}"
     )
 
     LOGGER.add(
@@ -1349,7 +1257,7 @@ def write_summary(
     )
 
     LOGGER.add(
-        f"Reorder moves:        "
+        f"Reorder operations:   "
         f"{reorder_moves}"
     )
 
@@ -1374,13 +1282,17 @@ def main():
     )
 
     print(
-        "Newest -> Oldest"
+        "Main playlist order -> Historical archive"
+    )
+
+    print(
+        "Deduplication: exact Spotify track ID"
     )
 
     print("=" * 60)
 
     # --------------------------------------------------------
-    # 1. Read archive.
+    # 1. Download cumulative archive.
     # --------------------------------------------------------
 
     archive = read_archive()
@@ -1398,56 +1310,173 @@ def main():
     token = get_access_token()
 
     # --------------------------------------------------------
-    # 3. Read destination.
+    # 3. Read the LIVE/MAIN playlist.
+    #
+    # IMPORTANT:
+    #
+    # ARCHIVE_PLAYLIST_ID is the main playlist ID by design.
+    #
+    # Capture this BEFORE modifying the destination so newly
+    # added historical tracks cannot contaminate the current
+    # main-playlist ordering.
+    # --------------------------------------------------------
+
+    main_playlist = get_playlist_items(
+        token,
+        ARCHIVE_PLAYLIST_ID,
+        "live main playlist",
+    )
+
+    main_playlist_unique, main_duplicates = (
+        find_duplicate_items(
+            main_playlist
+        )
+    )
+
+    if main_duplicates:
+        print()
+        print(
+            "WARNING: the live/main playlist itself "
+            "contains duplicate track IDs."
+        )
+
+        report_duplicates(
+            main_duplicates
+        )
+
+        print(
+            "The first occurrence of each track "
+            "will be used for main-playlist ordering."
+        )
+
+    main_playlist_count = len(
+        main_playlist_unique
+    )
+
+    # --------------------------------------------------------
+    # 4. Read destination archive playlist.
     # --------------------------------------------------------
 
     current = get_playlist_items(
-        token
+        token,
+        DESTINATION_PLAYLIST_ID,
+        "destination playlist",
     )
 
-    # Keep the original destination
-    # before any changes.
-    original_current = list(
+    original_playlist_count = len(
         current
     )
 
     # --------------------------------------------------------
-    # 4. Find new tracks.
+    # 5. Spotify-Dedup style dedup.
     # --------------------------------------------------------
 
+    print(
+        "Checking destination for "
+        "duplicate Spotify track IDs..."
+    )
+
     (
-        new_tracks,
-        exact,
-        fuzzy,
-        destination_mapping,
-    ) = determine_new_tracks(
-        archive,
-        current,
+        unique_current,
+        duplicate_items,
+    ) = find_duplicate_items(
+        current
+    )
+
+    report_duplicates(
+        duplicate_items
+    )
+
+    duplicate_count = len(
+        duplicate_items
+    )
+
+    print(
+        f"Unique destination tracks: "
+        f"{len(unique_current)}"
     )
 
     # --------------------------------------------------------
-    # 5. Add new tracks at the front.
-    #
-    # This is important for future runs.
+    # 6. Find archive tracks that aren't already
+    #    represented in the destination.
     # --------------------------------------------------------
 
-    added = add_tracks_at_front(
+    existing_ids = {
+        track["id"]
+        for track in unique_current
+    }
+
+    new_tracks = [
+        track
+        for track in archive
+        if track["track_id"]
+        not in existing_ids
+    ]
+
+    print()
+    print(
+        f"Archive tracks: "
+        f"{len(archive)}"
+    )
+
+    print(
+        f"Existing unique matches: "
+        f"{len(archive) - len(new_tracks)}"
+    )
+
+    print(
+        f"New archive tracks: "
+        f"{len(new_tracks)}"
+    )
+
+    # --------------------------------------------------------
+    # 7. Add new historical tracks.
+    # --------------------------------------------------------
+
+    added_count = add_new_tracks(
         new_tracks,
         token,
     )
 
-    # If tracks were added, fetch the actual
-    # Spotify playlist again.
+    # --------------------------------------------------------
+    # 8. Re-read destination after adding.
     #
-    # If nothing was added, we can continue
-    # using the existing playlist.
-    if added:
+    # We do NOT re-read main_playlist here.
+    #
+    # The original main_playlist snapshot is authoritative
+    # for the current/main section.
+    # --------------------------------------------------------
+
+    if added_count:
+
         current = get_playlist_items(
-            token
+            token,
+            DESTINATION_PLAYLIST_ID,
+            "destination playlist after additions",
+        )
+
+        (
+            unique_current,
+            duplicate_items,
+        ) = find_duplicate_items(
+            current
+        )
+
+        duplicate_count = len(
+            duplicate_items
         )
 
     # --------------------------------------------------------
-    # 6. Build exact desired order.
+    # 9. Build desired order.
+    #
+    # IMPORTANT:
+    #
+    #   Tier 1 = live main playlist
+    #   Tier 2 = historical archive
+    #   Tier 3 = destination-only tracks
+    #
+    # Main playlist tracks always win over historical
+    # ordering because they are currently active.
     # --------------------------------------------------------
 
     print(
@@ -1455,9 +1484,9 @@ def main():
     )
 
     desired_ids = build_desired_order(
+        main_playlist_unique,
         archive,
-        current,
-        destination_mapping,
+        unique_current,
     )
 
     current_ids = [
@@ -1465,119 +1494,222 @@ def main():
         for track in current
     ]
 
-    if len(current_ids) != len(
-        desired_ids
-    ):
-        raise RuntimeError(
-            "Current and desired playlist "
-            "lengths differ unexpectedly."
-        )
-
-    if set(current_ids) != set(
-        desired_ids
-    ):
-        raise RuntimeError(
-            "Current and desired playlist "
-            "contents differ unexpectedly."
-        )
-
     # --------------------------------------------------------
-    # 7. Check whether anything needs doing.
+    # Calculate historical section count for logging.
     # --------------------------------------------------------
 
-    if current_ids == desired_ids:
+    main_ids = {
+        track["id"]
+        for track in main_playlist_unique
+    }
 
-        print(
-            "Playlist is already correctly "
-            "ordered."
+    historical_ids = []
+
+    historical_seen = set()
+
+    for track in reversed(archive):
+
+        track_id = track["track_id"]
+
+        if track_id in main_ids:
+            continue
+
+        if track_id in historical_seen:
+            continue
+
+        historical_seen.add(
+            track_id
         )
 
-        reorder_moves = 0
-        reorder_duration = 0.0
-        rebuild_used = False
-
-    else:
-
-        mismatches = count_mismatches(
-            current_ids,
-            desired_ids,
+        historical_ids.append(
+            track_id
         )
 
-        print(
-            f"Playlist order differs at "
-            f"{mismatches} position(s)."
-        )
-
-        # ----------------------------------------------------
-        # 8. Large mismatch:
-        #    rebuild using 100-item batches.
-        # ----------------------------------------------------
-
-        if (
-            mismatches
-            >= REBUILD_MISMATCH_THRESHOLD
-        ):
-
-            started = time.perf_counter()
-
-            rebuild_count = (
-                rebuild_playlist(
-                    desired_ids,
-                    token,
-                )
-            )
-
-            reorder_duration = (
-                time.perf_counter()
-                - started
-            )
-
-            rebuild_used = True
-            reorder_moves = rebuild_count
-
-        # ----------------------------------------------------
-        # 9. Small mismatch:
-        #    use targeted range moves.
-        # ----------------------------------------------------
-
-        else:
-
-            (
-                reorder_moves,
-                reorder_duration,
-            ) = reorder_small(
-                current_ids,
-                desired_ids,
-                token,
-            )
-
-            rebuild_used = False
-
-    # --------------------------------------------------------
-    # 10. Verify everything.
-    # --------------------------------------------------------
-
-    final_count = verify_playlist(
-        desired_ids,
-        token,
+    historical_count = len(
+        historical_ids
     )
 
     # --------------------------------------------------------
-    # 11. Write log.
+    # 10. Determine whether a rebuild is required.
+    #
+    # Rebuild when:
+    #
+    #   - duplicates exist
+    #   - 100+ positions differ
+    #
+    # This keeps the common case fast while allowing small
+    # changes to use targeted reordering.
+    # --------------------------------------------------------
+
+    if duplicate_count > 0:
+
+        print()
+        print(
+            f"{duplicate_count} duplicate(s) "
+            "detected."
+        )
+
+        print(
+            "Forcing full playlist rebuild "
+            "to remove duplicates."
+        )
+
+        started = time.perf_counter()
+
+        rebuild_requests = rebuild_playlist(
+            desired_ids,
+            token,
+        )
+
+        reorder_duration = (
+            time.perf_counter()
+            - started
+        )
+
+        rebuild_used = True
+        reorder_moves = rebuild_requests
+
+    else:
+
+        # ----------------------------------------------------
+        # Already correct?
+        # ----------------------------------------------------
+
+        if (
+            current_ids == desired_ids
+        ):
+
+            print(
+                "Playlist is already correctly "
+                "ordered and deduplicated."
+            )
+
+            rebuild_used = False
+            reorder_moves = 0
+            reorder_duration = 0.0
+
+        else:
+
+            # ------------------------------------------------
+            # Count positional differences.
+            # ------------------------------------------------
+
+            shared_length = min(
+                len(current_ids),
+                len(desired_ids),
+            )
+
+            mismatch_count = sum(
+                1
+                for index in range(
+                    shared_length
+                )
+                if current_ids[index]
+                != desired_ids[index]
+            )
+
+            mismatch_count += abs(
+                len(current_ids)
+                - len(desired_ids)
+            )
+
+            print(
+                f"Playlist differs from desired "
+                f"order/content at "
+                f"{mismatch_count} position(s)."
+            )
+
+            # ------------------------------------------------
+            # Large change:
+            #
+            # Rebuild in ~100-item batches.
+            # ------------------------------------------------
+
+            if mismatch_count >= 100:
+
+                started = (
+                    time.perf_counter()
+                )
+
+                rebuild_requests = (
+                    rebuild_playlist(
+                        desired_ids,
+                        token,
+                    )
+                )
+
+                reorder_duration = (
+                    time.perf_counter()
+                    - started
+                )
+
+                rebuild_used = True
+                reorder_moves = (
+                    rebuild_requests
+                )
+
+            # ------------------------------------------------
+            # Small change:
+            #
+            # Use targeted Spotify reorder operations.
+            # ------------------------------------------------
+
+            else:
+
+                (
+                    reorder_moves,
+                    reorder_duration,
+                ) = reorder_small(
+                    current_ids,
+                    desired_ids,
+                    token,
+                )
+
+                rebuild_used = False
+
+    # --------------------------------------------------------
+    # 11. Verify exact final state.
+    # --------------------------------------------------------
+
+    final_playlist_count = (
+        verify_playlist(
+            desired_ids,
+            token,
+        )
+    )
+
+    # --------------------------------------------------------
+    # 12. Write log.
     # --------------------------------------------------------
 
     write_summary(
         archive_count=len(archive),
-        playlist_count=final_count,
-        exact=exact,
-        fuzzy=fuzzy,
+        original_playlist_count=(
+            original_playlist_count
+        ),
+        unique_before_count=(
+            len(unique_current)
+        ),
+        duplicate_count=(
+            duplicate_count
+        ),
+        main_playlist_count=(
+            main_playlist_count
+        ),
+        historical_count=(
+            historical_count
+        ),
         new_count=len(new_tracks),
-        added=added,
+        added_count=added_count,
+        final_playlist_count=(
+            final_playlist_count
+        ),
+        rebuild_used=rebuild_used,
         reorder_moves=reorder_moves,
         reorder_duration=reorder_duration,
-        rebuild_used=rebuild_used,
     )
 
+    print()
     print(
         "Done."
     )
