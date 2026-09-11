@@ -4,8 +4,7 @@ on:
   workflow_dispatch:
 
   schedule:
-    # 16:00 UTC every day
-    - cron: "0 16 * * *"
+    - cron: "10 16 * * *"
 
 jobs:
   sync-creamy:
