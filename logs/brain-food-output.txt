@@ -1,24 +1,12 @@
 ============================================================
-Spotify Playlist Archive → Permanent Playlist
-Dedup-style importer
-Newest → Oldest ordering
+Spotify Playlist Archive Sync
+Newest -> Oldest
 
-Archive tracks detected: 1233
-Exact duplicates skipped: 1150
-Fuzzy duplicates skipped: 83
-Missing metadata skipped: 0
-Tracks initially identified as new: 0
-Tracks actually added: 0
-Final duplicate check skipped: 0
-Total skipped during run: 1233
-
-============================================================
-SUMMARY
-============================================================
-Archive tracks:       1233
-Playlist tracks:      1150
-New tracks added:     0
-Desired playlist:     1150
-Ordering:             NEWEST → OLDEST
-Reorder moves:        0
-Reorder duration:     0.00 seconds
+Archive tracks:       1230
+Playlist tracks:      1233
+Exact duplicates:     1147
+Fuzzy duplicates:     0
+New tracks found:     83
+Tracks added:         83
+Reorder moves:        1230
+Reorder duration:     294.65 seconds
