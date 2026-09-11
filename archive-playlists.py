@@ -2,6 +2,7 @@ import argparse
 import os
 import re
 import time
+from collections import Counter
 from datetime import datetime
 from pathlib import Path
 
@@ -12,14 +13,22 @@ import requests
 # CONFIG
 # ============================================================
 
-ARCHIVE_URL = (
+CUMULATIVE_URL = (
     "https://raw.githubusercontent.com/"
     "mackorone/spotify-playlist-archive-2/"
     "refs/heads/main/playlists/cumulative/{playlist_id}.md"
 )
 
+PRETTY_URL = (
+    "https://raw.githubusercontent.com/"
+    "mackorone/spotify-playlist-archive-2/"
+    "refs/heads/main/playlists/pretty/{playlist_id}.md"
+)
+
 DRY_RUN = False
 
+# Spotify's current playlist APIs allow a maximum of
+# 100 items per add/reorder/replace request.
 BATCH_SIZE = 100
 
 
@@ -50,8 +59,6 @@ def parse_args():
 
 ARGS = parse_args()
 
-# The archive playlist ID is also the live/main Spotify
-# playlist ID by design.
 ARCHIVE_PLAYLIST_ID = ARGS.archive_playlist_id
 
 DESTINATION_PLAYLIST_ID = (
@@ -218,7 +225,7 @@ def spotify_request(
 
 
 # ============================================================
-# ARCHIVE
+# ARCHIVE PARSING
 # ============================================================
 
 TRACK_URL_RE = re.compile(
@@ -250,13 +257,85 @@ def parse_duration(value):
     )
 
 
-def read_archive():
-    url = ARCHIVE_URL.format(
+def dedupe_ids_in_order(ids):
+    """
+    Exact Spotify track-ID deduplication.
+
+    Keeps the first occurrence.
+    """
+
+    seen = set()
+    result = []
+
+    for track_id in ids:
+
+        if not track_id:
+            continue
+
+        if track_id in seen:
+            continue
+
+        seen.add(track_id)
+        result.append(track_id)
+
+    return result
+
+
+# ============================================================
+# PRETTY ARCHIVE
+# ============================================================
+
+def read_pretty():
+    url = PRETTY_URL.format(
         playlist_id=ARCHIVE_PLAYLIST_ID
     )
 
+    print()
     print(
-        "Downloading archive:"
+        "Downloading pretty archive:"
+    )
+
+    print(url)
+
+    response = requests.get(
+        url,
+        timeout=30,
+    )
+
+    response.raise_for_status()
+
+    # The pretty archive already stores the playlist
+    # in its exact current order.
+    #
+    # Track URLs occur in the table in playlist order.
+    raw_ids = TRACK_URL_RE.findall(
+        response.text
+    )
+
+    track_ids = dedupe_ids_in_order(
+        raw_ids
+    )
+
+    print(
+        f"Pretty archive contains "
+        f"{len(track_ids)} unique tracks."
+    )
+
+    return track_ids
+
+
+# ============================================================
+# CUMULATIVE ARCHIVE
+# ============================================================
+
+def read_cumulative():
+    url = CUMULATIVE_URL.format(
+        playlist_id=ARCHIVE_PLAYLIST_ID
+    )
+
+    print()
+    print(
+        "Downloading cumulative archive:"
     )
 
     print(url)
@@ -288,7 +367,7 @@ def read_archive():
             in line.strip("|").split("|")
         ]
 
-        # Expected:
+        # Expected cumulative columns:
         #
         # Title | Artist(s) | Album |
         # Length | Added | Removed
@@ -327,19 +406,20 @@ def read_archive():
             }
         )
 
-    # Oldest -> newest internally.
+    # The cumulative archive is normalized internally
+    # oldest -> newest.
     tracks.sort(
         key=lambda track: track["added"]
     )
 
-    # Deduplicate archive by exact
-    # Spotify track ID.
     seen = set()
     result = []
 
     for track in tracks:
 
-        track_id = track["track_id"]
+        track_id = track[
+            "track_id"
+        ]
 
         if track_id in seen:
             continue
@@ -348,7 +428,7 @@ def read_archive():
         result.append(track)
 
     print(
-        f"Archive contains "
+        f"Cumulative archive contains "
         f"{len(result)} unique tracks."
     )
 
@@ -356,7 +436,105 @@ def read_archive():
 
 
 # ============================================================
-# SPOTIFY PLAYLIST ITEMS
+# BUILD EXACT TARGET
+# ============================================================
+
+def build_target_order(
+    pretty_ids,
+    cumulative_tracks,
+):
+    """
+    Final desired order:
+
+        1. PRETTY tracks
+           exact current playlist order
+
+        2. CUMULATIVE tracks not present in PRETTY
+           newest -> oldest
+
+    Every Spotify track ID appears exactly once.
+    """
+
+    desired = []
+    used = set()
+
+    # --------------------------------------------------------
+    # Tier 1: PRETTY
+    # --------------------------------------------------------
+
+    for track_id in pretty_ids:
+
+        if track_id in used:
+            continue
+
+        desired.append(
+            track_id
+        )
+
+        used.add(
+            track_id
+        )
+
+    pretty_count = len(
+        desired
+    )
+
+    # --------------------------------------------------------
+    # Tier 2: CUMULATIVE
+    #
+    # Cumulative is oldest -> newest internally,
+    # so reverse it to get newest -> oldest.
+    # --------------------------------------------------------
+
+    cumulative_only = []
+
+    for track in reversed(
+        cumulative_tracks
+    ):
+
+        track_id = track[
+            "track_id"
+        ]
+
+        if track_id in used:
+            continue
+
+        desired.append(
+            track_id
+        )
+
+        used.add(
+            track_id
+        )
+
+        cumulative_only.append(
+            track_id
+        )
+
+    print()
+    print(
+        f"Target pretty section: "
+        f"{pretty_count} tracks."
+    )
+
+    print(
+        f"Target cumulative-only section: "
+        f"{len(cumulative_only)} tracks."
+    )
+
+    print(
+        f"Target playlist: "
+        f"{len(desired)} unique tracks."
+    )
+
+    return (
+        desired,
+        cumulative_only,
+    )
+
+
+# ============================================================
+# DESTINATION PLAYLIST
 # ============================================================
 
 def get_playlist_items(
@@ -364,6 +542,7 @@ def get_playlist_items(
     playlist_id,
     label="playlist",
 ):
+    print()
     print(
         f"Reading {label}..."
     )
@@ -452,29 +631,42 @@ def get_playlist_items(
     return tracks
 
 
+def get_playlist_snapshot(
+    token,
+):
+    response = spotify_request(
+        "GET",
+        (
+            f"{API}/playlists/"
+            f"{DESTINATION_PLAYLIST_ID}"
+        ),
+        token,
+        params={
+            "fields": "snapshot_id"
+        },
+    )
+
+    return response.json()[
+        "snapshot_id"
+    ]
+
+
 # ============================================================
 # DEDUPLICATION
 # ============================================================
 
-def find_duplicate_items(tracks):
+def find_duplicate_items(
+    tracks,
+):
     """
-    Spotify-Dedup-style detection.
+    Exact Spotify track-ID deduplication.
 
-    A duplicate is determined ONLY by the
-    exact Spotify track ID.
-
-    The first occurrence is kept.
-
-    This intentionally does NOT use:
-      - title similarity
-      - artist similarity
-      - duration similarity
-      - album similarity
+    The first occurrence is retained conceptually.
     """
 
-    seen_ids = set()
-    unique_tracks = []
-    duplicate_tracks = []
+    seen = set()
+    unique = []
+    duplicates = []
 
     for position, track in enumerate(
         tracks
@@ -487,9 +679,9 @@ def find_duplicate_items(tracks):
         if not track_id:
             continue
 
-        if track_id in seen_ids:
+        if track_id in seen:
 
-            duplicate_tracks.append(
+            duplicates.append(
                 {
                     "position": position,
                     "track": track,
@@ -498,20 +690,25 @@ def find_duplicate_items(tracks):
 
             continue
 
-        seen_ids.add(track_id)
-        unique_tracks.append(track)
+        seen.add(
+            track_id
+        )
+
+        unique.append(
+            track
+        )
 
     return (
-        unique_tracks,
-        duplicate_tracks,
+        unique,
+        duplicates,
     )
 
 
 def report_duplicates(
-    duplicate_tracks,
+    duplicate_items,
 ):
     count = len(
-        duplicate_tracks
+        duplicate_items
     )
 
     if count == 0:
@@ -526,7 +723,7 @@ def report_duplicates(
         f"{count} duplicate item(s)."
     )
 
-    for item in duplicate_tracks[
+    for item in duplicate_items[
         :20
     ]:
 
@@ -552,259 +749,333 @@ def report_duplicates(
 
 
 # ============================================================
-# DESIRED ORDER
+# REMOVE UNWANTED / DUPLICATE TRACK IDS
 # ============================================================
 
-def build_desired_order(
-    main_playlist,
-    archive,
-    destination_unique,
-):
-    """
-    Build the final archive playlist order.
-
-    Priority:
-
-        1. Current live/main Spotify playlist
-           in EXACTLY its current order.
-
-        2. Historical archive tracks that are
-           no longer in the main playlist,
-           newest -> oldest.
-
-        3. Any destination-only tracks that
-           exist outside the archive/main playlist,
-           preserving their current order.
-
-    Every Spotify track ID appears at most once.
-
-    Example:
-
-        MAIN PLAYLIST
-        A
-        B
-        C
-
-        ARCHIVE
-        Z
-        Y
-        C
-        B
-        A
-
-        DESTINATION-ONLY
-        X
-
-        Result:
-
-        A
-        B
-        C
-        Z
-        Y
-        X
-    """
-
-    desired = []
-    used = set()
-
-    # --------------------------------------------------------
-    # Tier 1:
-    #
-    # Current live playlist order.
-    #
-    # This is the most important part. The archive should
-    # visually match the real Spotify playlist at the top.
-    # --------------------------------------------------------
-
-    for track in main_playlist:
-
-        track_id = track.get(
-            "id"
-        )
-
-        if not track_id:
-            continue
-
-        if track_id in used:
-            continue
-
-        desired.append(
-            track_id
-        )
-
-        used.add(
-            track_id
-        )
-
-    main_ids = set(used)
-
-    print(
-        f"Main playlist section: "
-        f"{len(main_ids)} unique tracks."
-    )
-
-    # --------------------------------------------------------
-    # Tier 2:
-    #
-    # Historical archive.
-    #
-    # Archive is stored oldest -> newest, so reverse it
-    # to produce newest -> oldest.
-    #
-    # Anything already present in the main playlist is
-    # skipped because it already exists in tier 1.
-    # --------------------------------------------------------
-
-    historical_added = 0
-
-    for track in reversed(archive):
-
-        track_id = track[
-            "track_id"
-        ]
-
-        if track_id in used:
-            continue
-
-        desired.append(
-            track_id
-        )
-
-        used.add(
-            track_id
-        )
-
-        historical_added += 1
-
-    print(
-        f"Historical section: "
-        f"{historical_added} tracks."
-    )
-
-    # --------------------------------------------------------
-    # Tier 3:
-    #
-    # Preserve anything already in the destination playlist
-    # that isn't represented by the live playlist or archive.
-    #
-    # This prevents unrelated/custom destination tracks
-    # from disappearing during a rebuild.
-    # --------------------------------------------------------
-
-    destination_only_added = 0
-
-    for track in destination_unique:
-
-        track_id = track.get(
-            "id"
-        )
-
-        if not track_id:
-            continue
-
-        if track_id in used:
-            continue
-
-        desired.append(
-            track_id
-        )
-
-        used.add(
-            track_id
-        )
-
-        destination_only_added += 1
-
-    if destination_only_added:
-        print(
-            f"Destination-only section: "
-            f"{destination_only_added} tracks."
-        )
-
-    print(
-        f"Desired playlist contains "
-        f"{len(desired)} unique tracks."
-    )
-
-    return desired
-
-
-# ============================================================
-# ADD NEW ARCHIVE TRACKS
-# ============================================================
-
-def add_new_tracks(
-    new_tracks,
+def remove_track_ids(
+    track_ids,
     token,
+    snapshot,
 ):
     """
-    Add newly discovered archive tracks.
+    Remove unwanted IDs in batches of 100.
 
-    This is retained for incremental updates.
+    We deliberately remove an entire duplicate ID when it
+    occurs more than once, then add exactly one copy back
+    during the normal missing-track phase.
 
-    The final ordering is handled afterward by the
-    main/historical ordering logic.
-
-    Spotify accepts a maximum of 100 items
-    per add request.
+    This avoids trying to target individual duplicate
+    occurrences.
     """
 
-    if not new_tracks:
-        print(
-            "No new archive tracks to add."
-        )
-
-        return 0
-
-    ordered = list(
-        reversed(new_tracks)
+    track_ids = dedupe_ids_in_order(
+        track_ids
     )
 
-    total = len(ordered)
+    if not track_ids:
+        return (
+            snapshot,
+            0,
+        )
+
+    print()
+    print(
+        f"Removing {len(track_ids)} "
+        f"unwanted/duplicate track ID(s)..."
+    )
 
     if DRY_RUN:
         print(
-            f"DRY RUN: would add "
-            f"{total} tracks."
+            "DRY RUN: no tracks would be removed."
         )
 
-        return total
+        return (
+            snapshot,
+            0,
+        )
 
+    request_count = 0
+
+    for start in range(
+        0,
+        len(track_ids),
+        BATCH_SIZE,
+    ):
+
+        batch = track_ids[
+            start:start + BATCH_SIZE
+        ]
+
+        payload = {
+            "items": [
+                {
+                    "uri": (
+                        f"spotify:track:{track_id}"
+                    )
+                }
+                for track_id in batch
+            ],
+            "snapshot_id": snapshot,
+        }
+
+        response = spotify_request(
+            "DELETE",
+            (
+                f"{API}/playlists/"
+                f"{DESTINATION_PLAYLIST_ID}"
+                f"/items"
+            ),
+            token,
+            json=payload,
+        )
+
+        data = response.json()
+
+        snapshot = data.get(
+            "snapshot_id",
+            snapshot,
+        )
+
+        request_count += 1
+
+        print(
+            f"  Removed "
+            f"{min(start + len(batch), len(track_ids))}"
+            f"/{len(track_ids)}"
+        )
+
+    return (
+        snapshot,
+        request_count,
+    )
+
+
+# ============================================================
+# ADD MISSING CUMULATIVE TRACKS
+# ============================================================
+
+def add_cumulative_tracks(
+    track_ids,
+    current_ids,
+    token,
+    snapshot,
+):
+    """
+    Add missing cumulative-only tracks first.
+
+    They are appended in their final historical order.
+
+    This establishes the historical layer before the
+    pretty layer is inserted at the top.
+    """
+
+    current_set = set(
+        current_ids
+    )
+
+    missing = [
+        track_id
+        for track_id in track_ids
+        if track_id not in current_set
+    ]
+
+    if not missing:
+        print()
+        print(
+            "No missing cumulative-only tracks."
+        )
+
+        return (
+            current_ids,
+            snapshot,
+            0,
+            0,
+        )
+
+    print()
     print(
-        f"Adding {total} new archive "
-        f"track(s)..."
+        f"Adding {len(missing)} missing "
+        f"cumulative-only tracks..."
+    )
+
+    if DRY_RUN:
+        working = list(
+            current_ids
+        )
+
+        working.extend(
+            missing
+        )
+
+        print(
+            "DRY RUN: cumulative tracks "
+            "would be appended."
+        )
+
+        return (
+            working,
+            snapshot,
+            len(missing),
+            0,
+        )
+
+    working = list(
+        current_ids
+    )
+
+    request_count = 0
+
+    for start in range(
+        0,
+        len(missing),
+        BATCH_SIZE,
+    ):
+
+        batch = missing[
+            start:start + BATCH_SIZE
+        ]
+
+        uris = [
+            f"spotify:track:{track_id}"
+            for track_id in batch
+        ]
+
+        response = spotify_request(
+            "POST",
+            (
+                f"{API}/playlists/"
+                f"{DESTINATION_PLAYLIST_ID}"
+                f"/items"
+            ),
+            token,
+            json={
+                "uris": uris,
+            },
+        )
+
+        data = response.json()
+
+        snapshot = data.get(
+            "snapshot_id",
+            snapshot,
+        )
+
+        working.extend(
+            batch
+        )
+
+        request_count += 1
+
+        print(
+            f"  Added cumulative "
+            f"{min(start + len(batch), len(missing))}"
+            f"/{len(missing)}"
+        )
+
+    return (
+        working,
+        snapshot,
+        len(missing),
+        request_count,
+    )
+
+
+# ============================================================
+# ADD MISSING PRETTY TRACKS
+# ============================================================
+
+def add_pretty_tracks(
+    pretty_ids,
+    current_ids,
+    token,
+    snapshot,
+):
+    """
+    Add missing PRETTY tracks at position 0.
+
+    Because Spotify inserts each batch in the order supplied,
+    batches are inserted in reverse order.
+
+    Example:
+
+        pretty:
+            A B C D E F
+
+        batches:
+            A B C
+            D E F
+
+        insert D E F at 0
+        insert A B C at 0
+
+        result:
+            A B C D E F
+    """
+
+    current_set = set(
+        current_ids
+    )
+
+    missing = [
+        track_id
+        for track_id in pretty_ids
+        if track_id not in current_set
+    ]
+
+    if not missing:
+        print()
+        print(
+            "No missing pretty tracks."
+        )
+
+        return (
+            current_ids,
+            snapshot,
+            0,
+            0,
+        )
+
+    print()
+    print(
+        f"Adding {len(missing)} missing "
+        f"pretty tracks at the top..."
     )
 
     batches = [
-        ordered[
+        missing[
             start:start + BATCH_SIZE
         ]
         for start in range(
             0,
-            total,
+            len(missing),
             BATCH_SIZE,
         )
     ]
 
-    added = 0
+    working = list(
+        current_ids
+    )
 
-    # Insert older batches first.
-    #
-    # Then insert newer batches at position 0.
-    #
-    # This preserves newest -> oldest ordering
-    # for the newly added tracks until the final
-    # ordering pass runs.
+    request_count = 0
 
-    for batch in reversed(batches):
+    for batch in reversed(
+        batches
+    ):
+
+        if DRY_RUN:
+
+            working[
+                0:0
+            ] = batch
+
+            continue
 
         uris = [
-            f"spotify:track:{track['track_id']}"
-            for track in batch
+            f"spotify:track:{track_id}"
+            for track_id in batch
         ]
 
-        spotify_request(
+        response = spotify_request(
             "POST",
             (
                 f"{API}/playlists/"
@@ -818,285 +1089,301 @@ def add_new_tracks(
             },
         )
 
-        added += len(batch)
+        data = response.json()
 
-        print(
-            f"  Added "
-            f"{added}/{total}"
+        snapshot = data.get(
+            "snapshot_id",
+            snapshot,
         )
 
-    return added
-
-
-# ============================================================
-# REBUILD PLAYLIST
-# ============================================================
-
-def rebuild_playlist(
-    desired_ids,
-    token,
-):
-    """
-    Rebuild the destination playlist in batches.
-
-    First request:
-        replace playlist with first 100
-
-    Remaining requests:
-        append another 100 at a time.
-
-    This is dramatically faster than performing one
-    reorder request per track on large playlists.
-    """
-
-    if not desired_ids:
-        raise RuntimeError(
-            "Desired playlist is empty."
-        )
-
-    total = len(
-        desired_ids
-    )
-
-    print()
-    print(
-        f"Rebuilding playlist with "
-        f"{total} unique items..."
-    )
-
-    if DRY_RUN:
-        print(
-            "DRY RUN: playlist would be rebuilt."
-        )
-
-        return 0
-
-    request_count = 0
-
-    # --------------------------------------------------------
-    # First 100: replace entire playlist.
-    # --------------------------------------------------------
-
-    first_batch = desired_ids[
-        :BATCH_SIZE
-    ]
-
-    first_uris = [
-        f"spotify:track:{track_id}"
-        for track_id in first_batch
-    ]
-
-    print(
-        f"  Replacing playlist with "
-        f"items 1-{len(first_batch)}..."
-    )
-
-    spotify_request(
-        "PUT",
-        (
-            f"{API}/playlists/"
-            f"{DESTINATION_PLAYLIST_ID}/items"
-        ),
-        token,
-        json={
-            "uris": first_uris,
-        },
-    )
-
-    request_count += 1
-
-    completed = len(
-        first_batch
-    )
-
-    print(
-        f"  Rebuilt "
-        f"{completed}/{total}"
-    )
-
-    # --------------------------------------------------------
-    # Remaining items: append.
-    # --------------------------------------------------------
-
-    remaining = desired_ids[
-        BATCH_SIZE:
-    ]
-
-    for start in range(
-        0,
-        len(remaining),
-        BATCH_SIZE,
-    ):
-
-        batch = remaining[
-            start:start + BATCH_SIZE
-        ]
-
-        uris = [
-            f"spotify:track:{track_id}"
-            for track_id in batch
-        ]
-
-        spotify_request(
-            "POST",
-            (
-                f"{API}/playlists/"
-                f"{DESTINATION_PLAYLIST_ID}/items"
-            ),
-            token,
-            json={
-                "uris": uris,
-            },
-        )
+        working[
+            0:0
+        ] = batch
 
         request_count += 1
 
-        completed += len(batch)
-
         print(
-            f"  Rebuilt "
-            f"{completed}/{total}"
+            f"  Inserted pretty batch "
+            f"of {len(batch)} at position 0"
         )
-
-    print(
-        f"Playlist rebuild complete "
-        f"using {request_count} request(s)."
-    )
-
-    return request_count
-
-
-# ============================================================
-# TARGETED SMALL REORDER
-# ============================================================
-
-def reorder_small(
-    current_ids,
-    desired_ids,
-    token,
-):
-    """
-    Used only when the playlist is already mostly correct.
-
-    Moves contiguous ranges instead of moving every track
-    individually.
-    """
-
-    if current_ids == desired_ids:
-        print(
-            "Playlist is already correctly ordered."
-        )
-
-        return 0, 0.0
 
     if DRY_RUN:
         print(
-            "DRY RUN: playlist would be reordered."
+            "DRY RUN: pretty tracks "
+            "would be inserted at the top."
         )
 
-        return 0, 0.0
-
-    response = spotify_request(
-        "GET",
-        (
-            f"{API}/playlists/"
-            f"{DESTINATION_PLAYLIST_ID}"
-        ),
-        token,
-        params={
-            "fields": "snapshot_id"
-        },
+    return (
+        working,
+        snapshot,
+        len(missing),
+        request_count,
     )
 
-    snapshot = response.json()[
-        "snapshot_id"
-    ]
 
-    working = list(
+# ============================================================
+# CHUNKED MOVE PLANNER
+# ============================================================
+
+def plan_chunked_moves(
+    current_ids,
+    desired_ids,
+):
+    """
+    Calculate the exact reorder operations needed to turn
+    current_ids into desired_ids.
+
+    Strategy:
+
+        1. Find the earliest incorrect position.
+        2. Locate the desired track in the remaining playlist.
+        3. Starting there, find the longest contiguous run
+           that exactly matches the desired target.
+        4. Move that entire run.
+        5. Never move more than 100 items.
+        6. Simulate the move locally.
+        7. Continue from the next unresolved position.
+
+    Because the simulation is updated after every planned move,
+    every range_start/insert_before value is calculated against
+    the playlist state that exists immediately before that move.
+
+    This is dramatically fewer operations than moving individual
+    tracks.
+
+    It is a greedy block-move planner: it maximizes the useful
+    contiguous target block at each first mismatch. It does not
+    claim a mathematical global minimum for arbitrary permutations,
+    but it is deterministic and optimized for the archive's
+    layered structure.
+    """
+
+    current = list(
         current_ids
     )
 
-    moves = 0
+    desired = list(
+        desired_ids
+    )
 
-    started = time.perf_counter()
+    if len(current) != len(desired):
 
-    for target in range(
-        len(desired_ids)
-    ):
+        raise ValueError(
+            "Move planner requires current and desired "
+            "playlists to contain the same number of items."
+        )
 
-        wanted = desired_ids[
-            target
-        ]
+    if set(current) != set(desired):
 
-        if working[target] == wanted:
+        raise ValueError(
+            "Move planner requires current and desired "
+            "playlists to contain the same track IDs."
+        )
+
+    operations = []
+
+    position = 0
+
+    while position < len(desired):
+
+        # Already correct.
+        if (
+            current[position]
+            == desired[position]
+        ):
+            position += 1
             continue
 
+        wanted = desired[
+            position
+        ]
+
         try:
-            source = working.index(
+            source = current.index(
                 wanted,
-                target + 1,
+                position + 1,
             )
         except ValueError:
             raise RuntimeError(
-                "Desired track not found "
-                "during reorder."
+                "Move planner could not find "
+                f"desired track {wanted}."
             )
 
+        # Find the largest contiguous block beginning at
+        # `source` that exactly matches the target beginning
+        # at `position`.
         range_length = 1
 
         while (
+            range_length < BATCH_SIZE
+            and
             source + range_length
-            < len(working)
-            and target + range_length
-            < len(desired_ids)
-            and working[
+            < len(current)
+            and
+            position + range_length
+            < len(desired)
+            and
+            current[
                 source + range_length
             ]
-            == desired_ids[
-                target + range_length
+            ==
+            desired[
+                position + range_length
             ]
         ):
             range_length += 1
+
+        block = current[
+            source:
+            source + range_length
+        ]
+
+        # Spotify's insert_before is evaluated against the
+        # playlist after the moved range is removed.
+        #
+        # We always process the earliest mismatch and therefore
+        # source > position. Inserting at `position` is exact.
+        del current[
+            source:
+            source + range_length
+        ]
+
+        current[
+            position:position
+        ] = block
+
+        operations.append(
+            {
+                "range_start": source,
+                "insert_before": position,
+                "range_length": range_length,
+            }
+        )
+
+        position += range_length
+
+    if current != desired:
+
+        raise RuntimeError(
+            "Move planner failed to produce "
+            "the exact desired order."
+        )
+
+    return operations
+
+
+# ============================================================
+# EXECUTE CHUNKED MOVES
+# ============================================================
+
+def execute_chunked_moves(
+    operations,
+    token,
+    snapshot,
+):
+    """
+    Execute the precomputed move plan.
+
+    Every operation moves <= 100 tracks.
+
+    Spotify returns a new snapshot after every mutation,
+    which becomes the snapshot for the next move.
+    """
+
+    if not operations:
+
+        print()
+        print(
+            "No reorder operations required."
+        )
+
+        return (
+            snapshot,
+            0,
+            0.0,
+        )
+
+    print()
+    print(
+        f"Executing {len(operations)} "
+        f"chunked reorder operation(s)..."
+    )
+
+    if DRY_RUN:
+
+        total_items = sum(
+            operation[
+                "range_length"
+            ]
+            for operation in operations
+        )
+
+        print(
+            f"DRY RUN: would execute "
+            f"{len(operations)} move(s) "
+            f"covering {total_items} moved items."
+        )
+
+        return (
+            snapshot,
+            len(operations),
+            0.0,
+        )
+
+    started = time.perf_counter()
+
+    for number, operation in enumerate(
+        operations,
+        start=1,
+    ):
+
+        range_start = operation[
+            "range_start"
+        ]
+
+        insert_before = operation[
+            "insert_before"
+        ]
+
+        range_length = operation[
+            "range_length"
+        ]
+
+        if range_length > BATCH_SIZE:
+
+            raise RuntimeError(
+                "Planner generated a move larger "
+                "than the Spotify 100-item limit."
+            )
 
         response = spotify_request(
             "PUT",
             (
                 f"{API}/playlists/"
-                f"{DESTINATION_PLAYLIST_ID}/items"
+                f"{DESTINATION_PLAYLIST_ID}"
+                f"/items"
             ),
             token,
             json={
-                "range_start": source,
-                "insert_before": target,
+                "range_start": range_start,
+                "insert_before": insert_before,
                 "range_length": range_length,
                 "snapshot_id": snapshot,
             },
         )
 
-        snapshot = response.json()[
-            "snapshot_id"
-        ]
+        data = response.json()
 
-        block = working[
-            source:
-            source + range_length
-        ]
-
-        del working[
-            source:
-            source + range_length
-        ]
-
-        working[
-            target:target
-        ] = block
-
-        moves += 1
+        snapshot = data.get(
+            "snapshot_id",
+            snapshot,
+        )
 
         print(
-            f"  Move {moves}: "
-            f"{source} -> {target}, "
-            f"{range_length} item(s)"
+            f"  Move {number}/{len(operations)}: "
+            f"source={range_start}, "
+            f"insert_before={insert_before}, "
+            f"items={range_length}"
         )
 
     duration = (
@@ -1105,12 +1392,16 @@ def reorder_small(
     )
 
     print(
-        f"Targeted reorder complete: "
-        f"{moves} move(s), "
+        f"Chunked reorder complete: "
+        f"{len(operations)} move(s), "
         f"{duration:.2f}s"
     )
 
-    return moves, duration
+    return (
+        snapshot,
+        len(operations),
+        duration,
+    )
 
 
 # ============================================================
@@ -1121,6 +1412,7 @@ def verify_playlist(
     desired_ids,
     token,
 ):
+    print()
     print(
         "Verifying final playlist..."
     )
@@ -1136,21 +1428,52 @@ def verify_playlist(
         for track in final_tracks
     ]
 
-    # --------------------------------------------------------
-    # Check exact order/content.
-    # --------------------------------------------------------
-
     if final_ids != desired_ids:
 
-        raise RuntimeError(
-            "Playlist verification failed: "
-            "final order/content does not "
-            "match the desired playlist."
+        # Give useful diagnostic information.
+        shared = min(
+            len(final_ids),
+            len(desired_ids),
         )
 
-    # --------------------------------------------------------
-    # Check duplicates.
-    # --------------------------------------------------------
+        mismatch = None
+
+        for index in range(
+            shared
+        ):
+
+            if (
+                final_ids[index]
+                != desired_ids[index]
+            ):
+
+                mismatch = index
+                break
+
+        if mismatch is None:
+            mismatch = shared
+
+        actual = (
+            final_ids[mismatch]
+            if mismatch < len(final_ids)
+            else "<missing>"
+        )
+
+        expected = (
+            desired_ids[mismatch]
+            if mismatch < len(desired_ids)
+            else "<none>"
+        )
+
+        raise RuntimeError(
+            "Playlist verification failed.\n"
+            f"First mismatch at position "
+            f"{mismatch + 1}.\n"
+            f"Expected: {expected}\n"
+            f"Actual:   {actual}\n"
+            f"Expected count: {len(desired_ids)}\n"
+            f"Actual count:   {len(final_ids)}"
+        )
 
     if len(final_ids) != len(
         set(final_ids)
@@ -1158,8 +1481,7 @@ def verify_playlist(
 
         raise RuntimeError(
             "Playlist verification failed: "
-            "duplicate Spotify track IDs "
-            "are still present."
+            "duplicate Spotify track IDs remain."
         )
 
     print(
@@ -1179,17 +1501,16 @@ def verify_playlist(
 # ============================================================
 
 def write_summary(
-    archive_count,
-    original_playlist_count,
-    unique_before_count,
+    cumulative_count,
+    pretty_count,
+    target_count,
+    original_count,
     duplicate_count,
-    main_playlist_count,
-    historical_count,
-    new_count,
-    added_count,
-    final_playlist_count,
-    rebuild_used,
-    reorder_moves,
+    removed_count,
+    added_cumulative_count,
+    added_pretty_count,
+    final_count,
+    reorder_operations,
     reorder_duration,
 ):
     LOGGER.add(
@@ -1201,68 +1522,67 @@ def write_summary(
     )
 
     LOGGER.add(
-        "Main playlist order -> Historical archive"
+        "PRETTY order -> CUMULATIVE history"
+    )
+
+    LOGGER.add(
+        "Deduplication: exact Spotify track ID"
     )
 
     LOGGER.add("")
 
     LOGGER.add(
-        f"Archive tracks:       "
-        f"{archive_count}"
+        f"Cumulative tracks:       "
+        f"{cumulative_count}"
     )
 
     LOGGER.add(
-        f"Original playlist:    "
-        f"{original_playlist_count}"
+        f"Pretty tracks:            "
+        f"{pretty_count}"
     )
 
     LOGGER.add(
-        f"Unique before dedup:  "
-        f"{unique_before_count}"
+        f"Target tracks:            "
+        f"{target_count}"
     )
 
     LOGGER.add(
-        f"Duplicates removed:   "
+        f"Original destination:     "
+        f"{original_count}"
+    )
+
+    LOGGER.add(
+        f"Duplicate items found:    "
         f"{duplicate_count}"
     )
 
     LOGGER.add(
-        f"Main playlist tracks: "
-        f"{main_playlist_count}"
+        f"IDs removed/normalized:   "
+        f"{removed_count}"
     )
 
     LOGGER.add(
-        f"Historical tracks:    "
-        f"{historical_count}"
+        f"Cumulative tracks added:  "
+        f"{added_cumulative_count}"
     )
 
     LOGGER.add(
-        f"New tracks found:     "
-        f"{new_count}"
+        f"Pretty tracks added:      "
+        f"{added_pretty_count}"
     )
 
     LOGGER.add(
-        f"Tracks added:         "
-        f"{added_count}"
+        f"Final playlist:            "
+        f"{final_count}"
     )
 
     LOGGER.add(
-        f"Final playlist:       "
-        f"{final_playlist_count}"
+        f"Reorder operations:        "
+        f"{reorder_operations}"
     )
 
     LOGGER.add(
-        f"Rebuild used:         "
-        f"{rebuild_used}"
-    )
-
-    LOGGER.add(
-        f"Reorder operations:   "
-        f"{reorder_moves}"
-    )
-
-    LOGGER.add(
-        f"Reorder duration:     "
+        f"Reorder duration:          "
         f"{reorder_duration:.2f} seconds"
     )
 
@@ -1282,105 +1602,117 @@ def main():
     )
 
     print(
-        "Main playlist order -> Historical archive"
+        "PRETTY current order -> CUMULATIVE history"
     )
 
     print(
         "Deduplication: exact Spotify track ID"
     )
 
+    print(
+        "Source playlist: GitHub archive"
+    )
+
+    print(
+        "Destination playlist: Spotify"
+    )
+
     print("=" * 60)
 
     # --------------------------------------------------------
-    # 1. Download cumulative archive.
+    # 1. Read PRETTY.
+    #
+    # This is the authoritative current playlist order.
     # --------------------------------------------------------
 
-    archive = read_archive()
+    pretty_ids = read_pretty()
 
-    if not archive:
+    if not pretty_ids:
+
         raise RuntimeError(
-            "Archive returned zero tracks. "
+            "Pretty archive returned zero tracks. "
             "Refusing to modify playlist."
         )
 
     # --------------------------------------------------------
-    # 2. Authenticate.
+    # 2. Read CUMULATIVE.
+    #
+    # This supplies the historical tracks.
+    # --------------------------------------------------------
+
+    cumulative_tracks = (
+        read_cumulative()
+    )
+
+    if not cumulative_tracks:
+
+        raise RuntimeError(
+            "Cumulative archive returned zero tracks. "
+            "Refusing to modify playlist."
+        )
+
+    # --------------------------------------------------------
+    # 3. Build exact target.
+    #
+    # PRETTY always wins the top layer.
+    #
+    # CUMULATIVE-only tracks follow newest -> oldest.
+    # --------------------------------------------------------
+
+    (
+        desired_ids,
+        cumulative_only_ids,
+    ) = build_target_order(
+        pretty_ids,
+        cumulative_tracks,
+    )
+
+    target_set = set(
+        desired_ids
+    )
+
+    # --------------------------------------------------------
+    # 4. Authenticate.
     # --------------------------------------------------------
 
     token = get_access_token()
 
     # --------------------------------------------------------
-    # 3. Read the LIVE/MAIN playlist.
-    #
-    # IMPORTANT:
-    #
-    # ARCHIVE_PLAYLIST_ID is the main playlist ID by design.
-    #
-    # Capture this BEFORE modifying the destination so newly
-    # added historical tracks cannot contaminate the current
-    # main-playlist ordering.
+    # 5. Read destination.
     # --------------------------------------------------------
 
-    main_playlist = get_playlist_items(
-        token,
-        ARCHIVE_PLAYLIST_ID,
-        "live main playlist",
-    )
-
-    main_playlist_unique, main_duplicates = (
-        find_duplicate_items(
-            main_playlist
-        )
-    )
-
-    if main_duplicates:
-        print()
-        print(
-            "WARNING: the live/main playlist itself "
-            "contains duplicate track IDs."
-        )
-
-        report_duplicates(
-            main_duplicates
-        )
-
-        print(
-            "The first occurrence of each track "
-            "will be used for main-playlist ordering."
-        )
-
-    main_playlist_count = len(
-        main_playlist_unique
-    )
-
-    # --------------------------------------------------------
-    # 4. Read destination archive playlist.
-    # --------------------------------------------------------
-
-    current = get_playlist_items(
+    current_tracks = get_playlist_items(
         token,
         DESTINATION_PLAYLIST_ID,
         "destination playlist",
     )
 
-    original_playlist_count = len(
-        current
+    original_count = len(
+        current_tracks
+    )
+
+    current_ids = [
+        track["id"]
+        for track in current_tracks
+    ]
+
+    # --------------------------------------------------------
+    # 6. Get current Spotify snapshot.
+    # --------------------------------------------------------
+
+    snapshot = get_playlist_snapshot(
+        token
     )
 
     # --------------------------------------------------------
-    # 5. Spotify-Dedup style dedup.
+    # 7. Detect duplicates.
     # --------------------------------------------------------
-
-    print(
-        "Checking destination for "
-        "duplicate Spotify track IDs..."
-    )
 
     (
         unique_current,
         duplicate_items,
     ) = find_duplicate_items(
-        current
+        current_tracks
     )
 
     report_duplicates(
@@ -1391,322 +1723,250 @@ def main():
         duplicate_items
     )
 
+    # --------------------------------------------------------
+    # 8. Determine IDs that must be removed.
+    #
+    # Anything outside the target is removed.
+    #
+    # Duplicate IDs are also removed completely and then
+    # re-added exactly once during the normal addition phase.
+    # --------------------------------------------------------
+
+    counts = Counter(
+        current_ids
+    )
+
+    duplicate_ids = {
+        track_id
+        for track_id, count
+        in counts.items()
+        if count > 1
+    }
+
+    extra_ids = {
+        track_id
+        for track_id in counts
+        if track_id not in target_set
+    }
+
+    remove_ids = (
+        duplicate_ids
+        | extra_ids
+    )
+
+    print()
+
     print(
-        f"Unique destination tracks: "
-        f"{len(unique_current)}"
+        f"Destination IDs to remove/normalize: "
+        f"{len(remove_ids)}"
+    )
+
+    if duplicate_ids:
+        print(
+            f"  Duplicate IDs: "
+            f"{len(duplicate_ids)}"
+        )
+
+    if extra_ids:
+        print(
+            f"  Destination-only IDs: "
+            f"{len(extra_ids)}"
+        )
+
+    # --------------------------------------------------------
+    # 9. Remove extras and duplicate IDs.
+    # --------------------------------------------------------
+
+    (
+        snapshot,
+        remove_requests,
+    ) = remove_track_ids(
+        list(remove_ids),
+        token,
+        snapshot,
+    )
+
+    # Simulate the exact post-removal state locally.
+    #
+    # Every occurrence of a removed ID is considered gone.
+    working_ids = [
+        track_id
+        for track_id in current_ids
+        if track_id not in remove_ids
+    ]
+
+    # --------------------------------------------------------
+    # 10. Add missing CUMULATIVE-only tracks first.
+    # --------------------------------------------------------
+
+    (
+        working_ids,
+        snapshot,
+        added_cumulative_count,
+        cumulative_add_requests,
+    ) = add_cumulative_tracks(
+        cumulative_only_ids,
+        working_ids,
+        token,
+        snapshot,
     )
 
     # --------------------------------------------------------
-    # 6. Find archive tracks that aren't already
-    #    represented in the destination.
+    # 11. Add missing PRETTY tracks second.
+    #
+    # They are inserted at position 0.
+    #
+    # This establishes the layering:
+    #
+    #     PRETTY
+    #     --------
+    #     CUMULATIVE
     # --------------------------------------------------------
 
-    existing_ids = {
-        track["id"]
-        for track in unique_current
-    }
+    (
+        working_ids,
+        snapshot,
+        added_pretty_count,
+        pretty_add_requests,
+    ) = add_pretty_tracks(
+        pretty_ids,
+        working_ids,
+        token,
+        snapshot,
+    )
 
-    new_tracks = [
-        track
-        for track in archive
-        if track["track_id"]
-        not in existing_ids
-    ]
+    # --------------------------------------------------------
+    # 12. Sanity-check the local state before planning.
+    # --------------------------------------------------------
+
+    if (
+        len(working_ids)
+        != len(desired_ids)
+    ):
+
+        raise RuntimeError(
+            "Local playlist state does not contain "
+            "the expected number of tracks before "
+            "reorder planning.\n"
+            f"Current:  {len(working_ids)}\n"
+            f"Desired:  {len(desired_ids)}"
+        )
+
+    if set(working_ids) != target_set:
+
+        raise RuntimeError(
+            "Local playlist IDs do not match "
+            "the desired target before reorder planning."
+        )
+
+    # --------------------------------------------------------
+    # 13. Calculate exact chunked reorder plan.
+    # --------------------------------------------------------
 
     print()
     print(
-        f"Archive tracks: "
-        f"{len(archive)}"
+        "Calculating chunked reorder plan..."
+    )
+
+    operations = plan_chunked_moves(
+        working_ids,
+        desired_ids,
+    )
+
+    total_moved_items = sum(
+        operation[
+            "range_length"
+        ]
+        for operation in operations
+    )
+
+    largest_move = max(
+        (
+            operation[
+                "range_length"
+            ]
+            for operation in operations
+        ),
+        default=0,
     )
 
     print(
-        f"Existing unique matches: "
-        f"{len(archive) - len(new_tracks)}"
+        f"Planned reorder operations: "
+        f"{len(operations)}"
     )
 
     print(
-        f"New archive tracks: "
-        f"{len(new_tracks)}"
+        f"Total moved items across operations: "
+        f"{total_moved_items}"
+    )
+
+    print(
+        f"Largest move: "
+        f"{largest_move} item(s)"
+    )
+
+    if largest_move > BATCH_SIZE:
+
+        raise RuntimeError(
+            "Planner produced an operation "
+            "larger than 100 items."
+        )
+
+    # --------------------------------------------------------
+    # 14. Execute exact move plan.
+    # --------------------------------------------------------
+
+    (
+        snapshot,
+        reorder_operations,
+        reorder_duration,
+    ) = execute_chunked_moves(
+        operations,
+        token,
+        snapshot,
     )
 
     # --------------------------------------------------------
-    # 7. Add new historical tracks.
+    # 15. Verify exact final Spotify state.
     # --------------------------------------------------------
 
-    added_count = add_new_tracks(
-        new_tracks,
+    final_count = verify_playlist(
+        desired_ids,
         token,
     )
 
     # --------------------------------------------------------
-    # 8. Re-read destination after adding.
-    #
-    # We do NOT re-read main_playlist here.
-    #
-    # The original main_playlist snapshot is authoritative
-    # for the current/main section.
-    # --------------------------------------------------------
-
-    if added_count:
-
-        current = get_playlist_items(
-            token,
-            DESTINATION_PLAYLIST_ID,
-            "destination playlist after additions",
-        )
-
-        (
-            unique_current,
-            duplicate_items,
-        ) = find_duplicate_items(
-            current
-        )
-
-        duplicate_count = len(
-            duplicate_items
-        )
-
-    # --------------------------------------------------------
-    # 9. Build desired order.
-    #
-    # IMPORTANT:
-    #
-    #   Tier 1 = live main playlist
-    #   Tier 2 = historical archive
-    #   Tier 3 = destination-only tracks
-    #
-    # Main playlist tracks always win over historical
-    # ordering because they are currently active.
-    # --------------------------------------------------------
-
-    print(
-        "Calculating desired playlist order..."
-    )
-
-    desired_ids = build_desired_order(
-        main_playlist_unique,
-        archive,
-        unique_current,
-    )
-
-    current_ids = [
-        track["id"]
-        for track in current
-    ]
-
-    # --------------------------------------------------------
-    # Calculate historical section count for logging.
-    # --------------------------------------------------------
-
-    main_ids = {
-        track["id"]
-        for track in main_playlist_unique
-    }
-
-    historical_ids = []
-
-    historical_seen = set()
-
-    for track in reversed(archive):
-
-        track_id = track["track_id"]
-
-        if track_id in main_ids:
-            continue
-
-        if track_id in historical_seen:
-            continue
-
-        historical_seen.add(
-            track_id
-        )
-
-        historical_ids.append(
-            track_id
-        )
-
-    historical_count = len(
-        historical_ids
-    )
-
-    # --------------------------------------------------------
-    # 10. Determine whether a rebuild is required.
-    #
-    # Rebuild when:
-    #
-    #   - duplicates exist
-    #   - 100+ positions differ
-    #
-    # This keeps the common case fast while allowing small
-    # changes to use targeted reordering.
-    # --------------------------------------------------------
-
-    if duplicate_count > 0:
-
-        print()
-        print(
-            f"{duplicate_count} duplicate(s) "
-            "detected."
-        )
-
-        print(
-            "Forcing full playlist rebuild "
-            "to remove duplicates."
-        )
-
-        started = time.perf_counter()
-
-        rebuild_requests = rebuild_playlist(
-            desired_ids,
-            token,
-        )
-
-        reorder_duration = (
-            time.perf_counter()
-            - started
-        )
-
-        rebuild_used = True
-        reorder_moves = rebuild_requests
-
-    else:
-
-        # ----------------------------------------------------
-        # Already correct?
-        # ----------------------------------------------------
-
-        if (
-            current_ids == desired_ids
-        ):
-
-            print(
-                "Playlist is already correctly "
-                "ordered and deduplicated."
-            )
-
-            rebuild_used = False
-            reorder_moves = 0
-            reorder_duration = 0.0
-
-        else:
-
-            # ------------------------------------------------
-            # Count positional differences.
-            # ------------------------------------------------
-
-            shared_length = min(
-                len(current_ids),
-                len(desired_ids),
-            )
-
-            mismatch_count = sum(
-                1
-                for index in range(
-                    shared_length
-                )
-                if current_ids[index]
-                != desired_ids[index]
-            )
-
-            mismatch_count += abs(
-                len(current_ids)
-                - len(desired_ids)
-            )
-
-            print(
-                f"Playlist differs from desired "
-                f"order/content at "
-                f"{mismatch_count} position(s)."
-            )
-
-            # ------------------------------------------------
-            # Large change:
-            #
-            # Rebuild in ~100-item batches.
-            # ------------------------------------------------
-
-            if mismatch_count >= 100:
-
-                started = (
-                    time.perf_counter()
-                )
-
-                rebuild_requests = (
-                    rebuild_playlist(
-                        desired_ids,
-                        token,
-                    )
-                )
-
-                reorder_duration = (
-                    time.perf_counter()
-                    - started
-                )
-
-                rebuild_used = True
-                reorder_moves = (
-                    rebuild_requests
-                )
-
-            # ------------------------------------------------
-            # Small change:
-            #
-            # Use targeted Spotify reorder operations.
-            # ------------------------------------------------
-
-            else:
-
-                (
-                    reorder_moves,
-                    reorder_duration,
-                ) = reorder_small(
-                    current_ids,
-                    desired_ids,
-                    token,
-                )
-
-                rebuild_used = False
-
-    # --------------------------------------------------------
-    # 11. Verify exact final state.
-    # --------------------------------------------------------
-
-    final_playlist_count = (
-        verify_playlist(
-            desired_ids,
-            token,
-        )
-    )
-
-    # --------------------------------------------------------
-    # 12. Write log.
+    # 16. Write log.
     # --------------------------------------------------------
 
     write_summary(
-        archive_count=len(archive),
-        original_playlist_count=(
-            original_playlist_count
+        cumulative_count=len(
+            cumulative_tracks
         ),
-        unique_before_count=(
-            len(unique_current)
+        pretty_count=len(
+            pretty_ids
         ),
-        duplicate_count=(
-            duplicate_count
+        target_count=len(
+            desired_ids
         ),
-        main_playlist_count=(
-            main_playlist_count
+        original_count=original_count,
+        duplicate_count=duplicate_count,
+        removed_count=len(
+            remove_ids
         ),
-        historical_count=(
-            historical_count
+        added_cumulative_count=(
+            added_cumulative_count
         ),
-        new_count=len(new_tracks),
-        added_count=added_count,
-        final_playlist_count=(
-            final_playlist_count
+        added_pretty_count=(
+            added_pretty_count
         ),
-        rebuild_used=rebuild_used,
-        reorder_moves=reorder_moves,
-        reorder_duration=reorder_duration,
+        final_count=final_count,
+        reorder_operations=(
+            reorder_operations
+        ),
+        reorder_duration=(
+            reorder_duration
+        ),
     )
 
     print()
