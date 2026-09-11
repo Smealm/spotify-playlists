@@ -2,11 +2,13 @@ name: Sync Creamy Playlist
 
 on:
   workflow_dispatch:
+
   schedule:
+    # 16:00 UTC every day
     - cron: "0 16 * * *"
 
 jobs:
-  archive-creamy:
+  sync-creamy:
     runs-on: ubuntu-latest
 
     permissions:
@@ -26,7 +28,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests
 
-      - name: Mirror Creamy archive
+      - name: Sync Creamy archive
         env:
           SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
           SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
@@ -35,7 +37,7 @@ jobs:
           python archive-playlists.py \
             --archive-playlist-id "37i9dQZF1DXdgz8ZB7c2CP" \
             --destination-playlist-id "0d9fkV0DPxsq5Ag7IP8obL" \
-            --log "/logs/creamy-output.txt"
+            --log "logs/creamy-output.txt"
 
       - name: Commit updated log
         run: |
