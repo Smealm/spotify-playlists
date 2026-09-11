@@ -5,7 +5,7 @@ on:
 
   schedule:
     # 16:00 UTC every day
-    - cron: "0 16 * * *"
+    - cron: "20 16 * * *"
 
 jobs:
   sync-dubstep-don:
