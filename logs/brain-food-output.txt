@@ -4,9 +4,10 @@ Newest -> Oldest
 
 Archive tracks:       1230
 Playlist tracks:      1233
-Exact duplicates:     1147
+Exact duplicates:     1230
 Fuzzy duplicates:     0
-New tracks found:     83
-Tracks added:         83
-Reorder moves:        1230
-Reorder duration:     294.65 seconds
+New tracks found:     0
+Tracks added:         0
+Rebuild used:         False
+Reorder moves:        0
+Reorder duration:     0.00 seconds
