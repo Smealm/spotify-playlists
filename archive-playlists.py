@@ -2,8 +2,10 @@ import argparse
 import os
 import re
 import time
+import unicodedata
 from collections import Counter
 from datetime import datetime
+from difflib import SequenceMatcher
 from pathlib import Path
 
 import requests
@@ -30,6 +32,35 @@ DRY_RUN = False
 # Spotify's current playlist APIs allow a maximum of
 # 100 items per add/reorder/replace request.
 BATCH_SIZE = 100
+
+
+# ============================================================
+# DEDUP CONFIG
+# ============================================================
+
+# Strong metadata match:
+#
+# Same normalized title + same normalized artists + duration
+# within this tolerance.
+METADATA_DURATION_TOLERANCE_MS = 5000
+
+# Fuzzy match:
+#
+# A fuzzy duplicate must satisfy ALL of these:
+#
+#   title similarity >= FUZZY_TITLE_THRESHOLD
+#   artist similarity >= FUZZY_ARTIST_THRESHOLD
+#   duration difference <= FUZZY_DURATION_TOLERANCE_MS
+#
+# These are intentionally conservative because a false positive
+# is worse than leaving an obscure duplicate in the archive.
+FUZZY_TITLE_THRESHOLD = 0.94
+FUZZY_ARTIST_THRESHOLD = 0.94
+FUZZY_DURATION_TOLERANCE_MS = 5000
+
+# Do not fuzzy-match extremely short tracks. Tiny duration
+# differences on 30-60 second tracks can otherwise become noisy.
+FUZZY_MIN_DURATION_MS = 90000
 
 
 # ============================================================
@@ -225,7 +256,7 @@ def spotify_request(
 
 
 # ============================================================
-# ARCHIVE PARSING
+# GENERAL TEXT / TRACK HELPERS
 # ============================================================
 
 TRACK_URL_RE = re.compile(
@@ -255,6 +286,259 @@ def parse_duration(value):
         minutes * 60
         + seconds
     )
+
+
+def duration_ms(seconds):
+    return int(seconds * 1000)
+
+
+def normalize_text(value):
+    """
+    Normalize text for duplicate detection.
+
+    This deliberately does NOT remove meaningful words such as
+    remix/live/acoustic/etc. Those can represent different
+    recordings.
+    """
+
+    value = str(value or "").strip()
+
+    value = unicodedata.normalize(
+        "NFKD",
+        value,
+    )
+
+    value = (
+        value
+        .replace("’", "'")
+        .replace("`", "'")
+        .replace("&", "and")
+    )
+
+    value = value.lower()
+
+    # Normalize common separators.
+    value = re.sub(
+        r"\s*&\s*",
+        " and ",
+        value,
+    )
+
+    # Collapse punctuation spacing but don't remove all
+    # punctuation. We want to avoid turning distinct titles
+    # into identical strings unnecessarily.
+    value = re.sub(
+        r"\s+",
+        " ",
+        value,
+    )
+
+    return value.strip()
+
+
+def normalize_title(title):
+    return normalize_text(title)
+
+
+def extract_artist_names(value):
+    """
+    Extract artist names from the archive markdown.
+
+    Example:
+
+        [What So Not](artist-url), [Jack Blom](artist-url)
+
+    becomes:
+
+        ["What So Not", "Jack Blom"]
+    """
+
+    artists = re.findall(
+        r"\[([^\]]+)\]"
+        r"\(https://open\.spotify\.com/artist/"
+        r"[A-Za-z0-9]+\)",
+        value,
+    )
+
+    if artists:
+        return artists
+
+    # Fallback for unexpected archive formatting.
+    cleaned = re.sub(
+        r"\[[^\]]+\]\([^)]+\)",
+        "",
+        value,
+    )
+
+    return [
+        item.strip()
+        for item in cleaned.split(",")
+        if item.strip()
+    ]
+
+
+def normalize_artists(artists):
+    normalized = [
+        normalize_text(artist)
+        for artist in artists
+        if normalize_text(artist)
+    ]
+
+    return " | ".join(
+        normalized
+    )
+
+
+def track_fingerprint(track):
+    """
+    Strong normalized metadata fingerprint.
+
+    Spotify ID is deliberately NOT part of this fingerprint.
+    """
+
+    return (
+        normalize_title(
+            track.get("title", "")
+        ),
+        normalize_artists(
+            track.get("artists", [])
+        ),
+    )
+
+
+def duration_difference_ms(a, b):
+    return abs(
+        int(a.get("duration_ms", 0))
+        - int(b.get("duration_ms", 0))
+    )
+
+
+def similarity(a, b):
+    return SequenceMatcher(
+        None,
+        normalize_text(a),
+        normalize_text(b),
+    ).ratio()
+
+
+def fuzzy_scores(a, b):
+    title_score = similarity(
+        a.get("title", ""),
+        b.get("title", ""),
+    )
+
+    artist_score = similarity(
+        normalize_artists(
+            a.get("artists", [])
+        ),
+        normalize_artists(
+            b.get("artists", [])
+        ),
+    )
+
+    duration_diff = (
+        duration_difference_ms(a, b)
+    )
+
+    return (
+        title_score,
+        artist_score,
+        duration_diff,
+    )
+
+
+def strong_metadata_match(a, b):
+    """
+    Strong non-fuzzy duplicate detection.
+
+    Same normalized title + same normalized artist list +
+    duration within tolerance.
+    """
+
+    if (
+        track_fingerprint(a)
+        != track_fingerprint(b)
+    ):
+        return False
+
+    return (
+        duration_difference_ms(a, b)
+        <= METADATA_DURATION_TOLERANCE_MS
+    )
+
+
+def fuzzy_duplicate_match(a, b):
+    """
+    Conservative fuzzy duplicate detection.
+
+    All three conditions must pass.
+    """
+
+    duration_a = int(
+        a.get("duration_ms", 0)
+    )
+
+    duration_b = int(
+        b.get("duration_ms", 0)
+    )
+
+    if (
+        duration_a < FUZZY_MIN_DURATION_MS
+        or duration_b < FUZZY_MIN_DURATION_MS
+    ):
+        return False
+
+    (
+        title_score,
+        artist_score,
+        duration_diff,
+    ) = fuzzy_scores(a, b)
+
+    return (
+        title_score
+        >= FUZZY_TITLE_THRESHOLD
+        and
+        artist_score
+        >= FUZZY_ARTIST_THRESHOLD
+        and
+        duration_diff
+        <= FUZZY_DURATION_TOLERANCE_MS
+    )
+
+
+def classify_duplicate(a, b):
+    """
+    Return:
+
+        "id"
+        "metadata"
+        "fuzzy"
+        None
+
+    Exact Spotify ID is the strongest possible match.
+    """
+
+    if (
+        a.get("track_id")
+        and
+        a.get("track_id")
+        == b.get("track_id")
+    ):
+        return "id"
+
+    if strong_metadata_match(
+        a,
+        b,
+    ):
+        return "metadata"
+
+    if fuzzy_duplicate_match(
+        a,
+        b,
+    ):
+        return "fuzzy"
+
+    return None
 
 
 def dedupe_ids_in_order(ids):
@@ -304,24 +588,73 @@ def read_pretty():
 
     response.raise_for_status()
 
-    # The pretty archive already stores the playlist
-    # in its exact current order.
-    #
-    # Track URLs occur in the table in playlist order.
-    raw_ids = TRACK_URL_RE.findall(
-        response.text
-    )
+    tracks = []
+    seen_ids = set()
 
-    track_ids = dedupe_ids_in_order(
-        raw_ids
-    )
+    for line in response.text.splitlines():
+
+        if not line.startswith("|"):
+            continue
+
+        match = TRACK_URL_RE.search(
+            line
+        )
+
+        if not match:
+            continue
+
+        track_id = match.group(1)
+
+        if track_id in seen_ids:
+            continue
+
+        columns = [
+            column.strip()
+            for column
+            in line.strip("|").split("|")
+        ]
+
+        # Expected:
+        #
+        # # | Title | Artist(s) | Album | Length
+        #
+        if len(columns) < 5:
+            continue
+
+        title = columns[1]
+        artist_column = columns[2]
+        duration = columns[4]
+
+        artists = extract_artist_names(
+            artist_column
+        )
+
+        duration_seconds = parse_duration(
+            duration
+        )
+
+        tracks.append(
+            {
+                "track_id": track_id,
+                "title": title,
+                "artists": artists,
+                "duration": duration,
+                "duration_ms": duration_ms(
+                    duration_seconds
+                ),
+                "source": "pretty",
+                "added": None,
+            }
+        )
+
+        seen_ids.add(track_id)
 
     print(
         f"Pretty archive contains "
-        f"{len(track_ids)} unique tracks."
+        f"{len(tracks)} unique tracks."
     )
 
-    return track_ids
+    return tracks
 
 
 # ============================================================
@@ -376,7 +709,7 @@ def read_cumulative():
             continue
 
         title = columns[0]
-        artist = columns[1]
+        artist_column = columns[1]
         duration = columns[3]
         added = columns[4]
 
@@ -394,14 +727,24 @@ def read_cumulative():
         except ValueError:
             continue
 
+        artists = extract_artist_names(
+            artist_column
+        )
+
+        duration_seconds = parse_duration(
+            duration
+        )
+
         tracks.append(
             {
                 "track_id": match.group(1),
                 "title": title,
-                "artist": artist,
-                "duration": parse_duration(
-                    duration
+                "artists": artists,
+                "duration": duration,
+                "duration_ms": duration_ms(
+                    duration_seconds
                 ),
+                "source": "cumulative",
                 "added": added_date,
             }
         )
@@ -412,6 +755,7 @@ def read_cumulative():
         key=lambda track: track["added"]
     )
 
+    # Exact Spotify-ID dedup first.
     seen = set()
     result = []
 
@@ -429,10 +773,467 @@ def read_cumulative():
 
     print(
         f"Cumulative archive contains "
-        f"{len(result)} unique tracks."
+        f"{len(result)} unique Spotify IDs."
     )
 
     return result
+
+
+# ============================================================
+# ARCHIVE DEDUPLICATION
+# ============================================================
+
+def choose_better_canonical(
+    existing,
+    candidate,
+):
+    """
+    Decide which archive track should represent a duplicate
+    cluster.
+
+    Priority:
+
+        1. PRETTY
+        2. newest cumulative track
+
+    This function is mainly defensive because the archive
+    tracks are already processed in the correct priority order.
+    """
+
+    existing_source = existing.get(
+        "source"
+    )
+
+    candidate_source = candidate.get(
+        "source"
+    )
+
+    if (
+        candidate_source == "pretty"
+        and existing_source != "pretty"
+    ):
+        return candidate
+
+    if (
+        existing_source == "pretty"
+        and candidate_source != "pretty"
+    ):
+        return existing
+
+    existing_added = existing.get(
+        "added"
+    )
+
+    candidate_added = candidate.get(
+        "added"
+    )
+
+    if (
+        candidate_added
+        and
+        (
+            not existing_added
+            or candidate_added > existing_added
+        )
+    ):
+        return candidate
+
+    return existing
+
+
+def find_archive_duplicate(
+    track,
+    canonical_tracks,
+):
+    """
+    Find the strongest matching canonical track.
+
+    Matching priority:
+
+        1. Exact Spotify ID
+        2. Exact normalized metadata + duration
+        3. Conservative fuzzy metadata
+    """
+
+    # --------------------------------------------------------
+    # Exact Spotify ID.
+    # --------------------------------------------------------
+
+    for canonical in canonical_tracks:
+
+        if (
+            track["track_id"]
+            == canonical["track_id"]
+        ):
+            return (
+                canonical,
+                "id",
+            )
+
+    # --------------------------------------------------------
+    # Strong normalized metadata.
+    # --------------------------------------------------------
+
+    for canonical in canonical_tracks:
+
+        if strong_metadata_match(
+            track,
+            canonical,
+        ):
+            return (
+                canonical,
+                "metadata",
+            )
+
+    # --------------------------------------------------------
+    # Fuzzy matching.
+    #
+    # This is deliberately only attempted after the stronger
+    # checks have failed.
+    # --------------------------------------------------------
+
+    best_match = None
+    best_score = None
+
+    for canonical in canonical_tracks:
+
+        if not fuzzy_duplicate_match(
+            track,
+            canonical,
+        ):
+            continue
+
+        (
+            title_score,
+            artist_score,
+            duration_diff,
+        ) = fuzzy_scores(
+            track,
+            canonical,
+        )
+
+        score = (
+            title_score
+            + artist_score
+            - (
+                duration_diff
+                / 1000000
+            )
+        )
+
+        if (
+            best_score is None
+            or score > best_score
+        ):
+            best_score = score
+            best_match = canonical
+
+    if best_match is not None:
+        return (
+            best_match,
+            "fuzzy",
+        )
+
+    return (
+        None,
+        None,
+    )
+
+
+def deduplicate_archive(
+    pretty_tracks,
+    cumulative_tracks,
+):
+    """
+    Deduplicate the complete archive.
+
+    Processing order is intentional:
+
+        1. PRETTY in exact playlist order.
+        2. CUMULATIVE newest -> oldest.
+
+    Therefore:
+
+        PRETTY always wins.
+
+        If a duplicate exists only in cumulative,
+        the newest cumulative version wins.
+
+    Returns:
+
+        canonical_pretty_tracks
+        canonical_cumulative_tracks
+        canonical_by_id
+        archive_id_to_canonical_id
+        statistics
+    """
+
+    canonical_tracks = []
+
+    canonical_pretty_tracks = []
+    canonical_cumulative_tracks = []
+
+    archive_id_to_canonical_id = {}
+
+    stats = Counter()
+
+    duplicate_reports = []
+
+    # --------------------------------------------------------
+    # PRETTY FIRST
+    # --------------------------------------------------------
+
+    for track in pretty_tracks:
+
+        canonical, match_type = (
+            find_archive_duplicate(
+                track,
+                canonical_tracks,
+            )
+        )
+
+        if canonical is None:
+
+            canonical_tracks.append(
+                track
+            )
+
+            canonical_pretty_tracks.append(
+                track
+            )
+
+            archive_id_to_canonical_id[
+                track["track_id"]
+            ] = track["track_id"]
+
+            stats["canonical_pretty"] += 1
+
+            continue
+
+        # A duplicate already exists.
+        #
+        # Because pretty is processed first, another pretty
+        # occurrence loses to the first occurrence.
+        stats[
+            f"duplicate_{match_type}"
+        ] += 1
+
+        archive_id_to_canonical_id[
+            track["track_id"]
+        ] = canonical["track_id"]
+
+        duplicate_reports.append(
+            {
+                "duplicate": track,
+                "canonical": canonical,
+                "match": match_type,
+            }
+        )
+
+    # --------------------------------------------------------
+    # CUMULATIVE NEWEST -> OLDEST
+    #
+    # The input is oldest -> newest, so reverse it.
+    # --------------------------------------------------------
+
+    for track in reversed(
+        cumulative_tracks
+    ):
+
+        canonical, match_type = (
+            find_archive_duplicate(
+                track,
+                canonical_tracks,
+            )
+        )
+
+        if canonical is None:
+
+            canonical_tracks.append(
+                track
+            )
+
+            canonical_cumulative_tracks.append(
+                track
+            )
+
+            archive_id_to_canonical_id[
+                track["track_id"]
+            ] = track["track_id"]
+
+            stats[
+                "canonical_cumulative"
+            ] += 1
+
+            continue
+
+        # Already represented by a better canonical track.
+        stats[
+            f"duplicate_{match_type}"
+        ] += 1
+
+        archive_id_to_canonical_id[
+            track["track_id"]
+        ] = canonical["track_id"]
+
+        duplicate_reports.append(
+            {
+                "duplicate": track,
+                "canonical": canonical,
+                "match": match_type,
+            }
+        )
+
+    # --------------------------------------------------------
+    # Report.
+    # --------------------------------------------------------
+
+    total_duplicates = sum(
+        value
+        for key, value
+        in stats.items()
+        if key.startswith("duplicate_")
+    )
+
+    stats[
+        "total_duplicates"
+    ] = total_duplicates
+
+    print()
+    print(
+        "Archive deduplication:"
+    )
+
+    print(
+        f"  Canonical pretty:       "
+        f"{len(canonical_pretty_tracks)}"
+    )
+
+    print(
+        f"  Canonical cumulative:   "
+        f"{len(canonical_cumulative_tracks)}"
+    )
+
+    print(
+        f"  Exact ID duplicates:    "
+        f"{stats['duplicate_id']}"
+    )
+
+    print(
+        f"  Metadata duplicates:    "
+        f"{stats['duplicate_metadata']}"
+    )
+
+    print(
+        f"  Fuzzy duplicates:       "
+        f"{stats['duplicate_fuzzy']}"
+    )
+
+    print(
+        f"  Total archive duplicates: "
+        f"{total_duplicates}"
+    )
+
+    if duplicate_reports:
+        print()
+        print(
+            "Archive duplicate examples:"
+        )
+
+        for report in duplicate_reports[
+            :20
+        ]:
+
+            duplicate = report[
+                "duplicate"
+            ]
+
+            canonical = report[
+                "canonical"
+            ]
+
+            match_type = report[
+                "match"
+            ]
+
+            print(
+                f"  [{match_type}] "
+                f"{duplicate['title']} "
+                f"({duplicate['track_id']})"
+            )
+
+            print(
+                f"      KEEP "
+                f"{canonical['track_id']}"
+            )
+
+            if match_type == "fuzzy":
+
+                (
+                    title_score,
+                    artist_score,
+                    duration_diff,
+                ) = fuzzy_scores(
+                    duplicate,
+                    canonical,
+                )
+
+                print(
+                    f"      title={title_score:.3f} "
+                    f"artist={artist_score:.3f} "
+                    f"duration_diff="
+                    f"{duration_diff}ms"
+                )
+
+            else:
+
+                print(
+                    f"      match={match_type}"
+                )
+
+        if len(duplicate_reports) > 20:
+            print(
+                f"  ...and "
+                f"{len(duplicate_reports) - 20} "
+                f"more."
+            )
+
+    # --------------------------------------------------------
+    # The canonical tracks are currently:
+    #
+    #   pretty canonical tracks
+    #   cumulative canonical tracks
+    #
+    # But cumulative canonical tracks were processed newest
+    # -> oldest, which is exactly the order we need.
+    # --------------------------------------------------------
+
+    desired_tracks = (
+        canonical_pretty_tracks
+        + canonical_cumulative_tracks
+    )
+
+    desired_ids = [
+        track["track_id"]
+        for track in desired_tracks
+    ]
+
+    if len(desired_ids) != len(
+        set(desired_ids)
+    ):
+        raise RuntimeError(
+            "Archive deduplication failed: "
+            "canonical target still contains "
+            "duplicate Spotify IDs."
+        )
+
+    return (
+        canonical_pretty_tracks,
+        canonical_cumulative_tracks,
+        desired_tracks,
+        archive_id_to_canonical_id,
+        stats,
+    )
 
 
 # ============================================================
@@ -440,29 +1241,34 @@ def read_cumulative():
 # ============================================================
 
 def build_target_order(
-    pretty_ids,
+    pretty_tracks,
     cumulative_tracks,
 ):
     """
-    Final desired order:
+    Build the exact desired order from already-deduplicated
+    archive tracks.
 
-        1. PRETTY tracks
-           exact current playlist order
+    PRETTY:
+        exact current playlist order
 
-        2. CUMULATIVE tracks not present in PRETTY
-           newest -> oldest
+    CUMULATIVE:
+        newest -> oldest
 
-    Every Spotify track ID appears exactly once.
+    PRETTY always occupies the top layer.
     """
 
     desired = []
     used = set()
 
     # --------------------------------------------------------
-    # Tier 1: PRETTY
+    # PRETTY
     # --------------------------------------------------------
 
-    for track_id in pretty_ids:
+    for track in pretty_tracks:
+
+        track_id = track[
+            "track_id"
+        ]
 
         if track_id in used:
             continue
@@ -480,17 +1286,12 @@ def build_target_order(
     )
 
     # --------------------------------------------------------
-    # Tier 2: CUMULATIVE
-    #
-    # Cumulative is oldest -> newest internally,
-    # so reverse it to get newest -> oldest.
+    # CUMULATIVE ONLY
     # --------------------------------------------------------
 
     cumulative_only = []
 
-    for track in reversed(
-        cumulative_tracks
-    ):
+    for track in cumulative_tracks:
 
         track_id = track[
             "track_id"
@@ -610,7 +1411,9 @@ def get_playlist_items(
             if not track_id:
                 continue
 
-            tracks.append(track)
+            tracks.append(
+                track
+            )
 
         print(
             f"  Read page {page}: "
@@ -652,99 +1455,258 @@ def get_playlist_snapshot(
 
 
 # ============================================================
-# DEDUPLICATION
+# DESTINATION DEDUP / ARCHIVE MATCHING
 # ============================================================
 
-def find_duplicate_items(
-    tracks,
+def make_destination_track(
+    destination_track,
+    archive_by_id,
 ):
     """
-    Exact Spotify track-ID deduplication.
+    Turn a Spotify destination item into our internal track
+    representation.
 
-    The first occurrence is retained conceptually.
+    If the track exists in the archive, use the archive's
+    metadata because it is richer and deterministic.
+
+    Otherwise we retain the Spotify item's name but do not
+    attempt fuzzy matching against incomplete metadata.
     """
 
-    seen = set()
-    unique = []
-    duplicates = []
+    track_id = destination_track.get(
+        "id"
+    )
 
-    for position, track in enumerate(
-        tracks
+    archive_track = archive_by_id.get(
+        track_id
+    )
+
+    if archive_track:
+        return dict(
+            archive_track
+        )
+
+    return {
+        "track_id": track_id,
+        "title": destination_track.get(
+            "name",
+            "",
+        ),
+        "artists": [],
+        "duration": "",
+        "duration_ms": 0,
+        "source": "destination",
+        "added": None,
+    }
+
+
+def find_destination_duplicate_groups(
+    destination_tracks,
+    archive_by_id,
+    canonical_ids,
+):
+    """
+    Find duplicate destination items.
+
+    Matching is performed against canonical archive tracks.
+
+    Important:
+        - Exact Spotify IDs are always handled.
+        - Metadata/fuzzy matching is only possible when the
+          destination track has archive metadata.
+    """
+
+    duplicate_ids = set()
+    duplicate_reports = []
+
+    canonical_track_list = [
+        archive_by_id[
+            track_id
+        ]
+        for track_id in canonical_ids
+        if track_id in archive_by_id
+    ]
+
+    for position, destination_track in enumerate(
+        destination_tracks
     ):
 
-        track_id = track.get(
+        track_id = destination_track.get(
             "id"
         )
 
         if not track_id:
             continue
 
-        if track_id in seen:
-
-            duplicates.append(
-                {
-                    "position": position,
-                    "track": track,
-                }
+        destination_internal = (
+            make_destination_track(
+                destination_track,
+                archive_by_id,
             )
+        )
 
+        # ----------------------------------------------------
+        # Exact ID:
+        # if it is canonical, it is fine.
+        # If it isn't canonical but maps to one, it must be
+        # removed.
+        # ----------------------------------------------------
+
+        if track_id not in canonical_ids:
+
+            for canonical in canonical_track_list:
+
+                match_type = classify_duplicate(
+                    destination_internal,
+                    canonical,
+                )
+
+                if match_type:
+
+                    duplicate_ids.add(
+                        track_id
+                    )
+
+                    duplicate_reports.append(
+                        {
+                            "position": position,
+                            "duplicate": destination_internal,
+                            "canonical": canonical,
+                            "match": match_type,
+                        }
+                    )
+
+                    break
+
+    # --------------------------------------------------------
+    # Exact duplicate occurrences already present in the
+    # destination.
+    # --------------------------------------------------------
+
+    counts = Counter(
+        track.get("id")
+        for track in destination_tracks
+        if track.get("id")
+    )
+
+    for track_id, count in counts.items():
+
+        if count <= 1:
             continue
 
-        seen.add(
+        # Remove the whole ID. The canonical copy will be
+        # re-added if necessary.
+        duplicate_ids.add(
             track_id
         )
 
-        unique.append(
-            track
-        )
+        for position, track in enumerate(
+            destination_tracks
+        ):
+
+            if track.get("id") != track_id:
+                continue
+
+            duplicate_reports.append(
+                {
+                    "position": position,
+                    "duplicate": {
+                        "track_id": track_id,
+                        "title": track.get(
+                            "name",
+                            "",
+                        ),
+                        "artists": [],
+                        "duration": "",
+                        "duration_ms": 0,
+                    },
+                    "canonical": {
+                        "track_id": track_id,
+                        "title": track.get(
+                            "name",
+                            "",
+                        ),
+                        "artists": [],
+                        "duration": "",
+                        "duration_ms": 0,
+                    },
+                    "match": "id",
+                }
+            )
 
     return (
-        unique,
-        duplicates,
+        duplicate_ids,
+        duplicate_reports,
     )
 
 
-def report_duplicates(
-    duplicate_items,
+def report_destination_duplicates(
+    duplicate_reports,
 ):
-    count = len(
-        duplicate_items
-    )
+    if not duplicate_reports:
 
-    if count == 0:
         print(
-            "Deduplication: no duplicates found."
+            "Destination deduplication: "
+            "no duplicate archive matches found."
         )
 
         return
 
+    print()
     print(
-        f"Deduplication: found "
-        f"{count} duplicate item(s)."
+        "Destination duplicate matches:"
     )
 
-    for item in duplicate_items[
+    for report in duplicate_reports[
         :20
     ]:
 
-        position = item[
-            "position"
+        duplicate = report[
+            "duplicate"
         ]
 
-        track = item[
-            "track"
+        canonical = report[
+            "canonical"
+        ]
+
+        match_type = report[
+            "match"
         ]
 
         print(
-            f"  Duplicate at position "
-            f"{position + 1}: "
-            f"{track.get('name', 'Unknown')} "
-            f"({track.get('id')})"
+            f"  [{match_type}] "
+            f"{duplicate.get('title', 'Unknown')} "
+            f"({duplicate.get('track_id')})"
         )
 
-    if count > 20:
         print(
-            f"  ...and {count - 20} more."
+            f"      KEEP "
+            f"{canonical.get('track_id')}"
+        )
+
+        if match_type == "fuzzy":
+
+            (
+                title_score,
+                artist_score,
+                duration_diff,
+            ) = fuzzy_scores(
+                duplicate,
+                canonical,
+            )
+
+            print(
+                f"      title={title_score:.3f} "
+                f"artist={artist_score:.3f} "
+                f"duration_diff="
+                f"{duration_diff}ms"
+            )
+
+    if len(duplicate_reports) > 20:
+        print(
+            f"  ...and "
+            f"{len(duplicate_reports) - 20} "
+            f"more."
         )
 
 
@@ -760,12 +1722,9 @@ def remove_track_ids(
     """
     Remove unwanted IDs in batches of 100.
 
-    We deliberately remove an entire duplicate ID when it
-    occurs more than once, then add exactly one copy back
-    during the normal missing-track phase.
-
-    This avoids trying to target individual duplicate
-    occurrences.
+    Removing an entire ID is intentional. If that ID represents
+    a duplicate/replaced Spotify release, the canonical ID will
+    be restored during the normal addition phase.
     """
 
     track_ids = dedupe_ids_in_order(
@@ -785,6 +1744,7 @@ def remove_track_ids(
     )
 
     if DRY_RUN:
+
         print(
             "DRY RUN: no tracks would be removed."
         )
@@ -864,9 +1824,6 @@ def add_cumulative_tracks(
     Add missing cumulative-only tracks first.
 
     They are appended in their final historical order.
-
-    This establishes the historical layer before the
-    pretty layer is inserted at the top.
     """
 
     current_set = set(
@@ -880,6 +1837,7 @@ def add_cumulative_tracks(
     ]
 
     if not missing:
+
         print()
         print(
             "No missing cumulative-only tracks."
@@ -899,6 +1857,7 @@ def add_cumulative_tracks(
     )
 
     if DRY_RUN:
+
         working = list(
             current_ids
         )
@@ -993,23 +1952,8 @@ def add_pretty_tracks(
     """
     Add missing PRETTY tracks at position 0.
 
-    Because Spotify inserts each batch in the order supplied,
-    batches are inserted in reverse order.
-
-    Example:
-
-        pretty:
-            A B C D E F
-
-        batches:
-            A B C
-            D E F
-
-        insert D E F at 0
-        insert A B C at 0
-
-        result:
-            A B C D E F
+    Batches are inserted in reverse order so the final order
+    remains identical to PRETTY.
     """
 
     current_set = set(
@@ -1023,6 +1967,7 @@ def add_pretty_tracks(
     ]
 
     if not missing:
+
         print()
         print(
             "No missing pretty tracks."
@@ -1108,6 +2053,7 @@ def add_pretty_tracks(
         )
 
     if DRY_RUN:
+
         print(
             "DRY RUN: pretty tracks "
             "would be inserted at the top."
@@ -1135,27 +2081,15 @@ def plan_chunked_moves(
 
     Strategy:
 
-        1. Find the earliest incorrect position.
-        2. Locate the desired track in the remaining playlist.
-        3. Starting there, find the longest contiguous run
-           that exactly matches the desired target.
-        4. Move that entire run.
-        5. Never move more than 100 items.
-        6. Simulate the move locally.
-        7. Continue from the next unresolved position.
+        1. Find earliest incorrect position.
+        2. Find desired track in remaining playlist.
+        3. Find longest contiguous target block.
+        4. Move <= 100 items.
+        5. Simulate locally.
+        6. Continue.
 
-    Because the simulation is updated after every planned move,
-    every range_start/insert_before value is calculated against
-    the playlist state that exists immediately before that move.
-
-    This is dramatically fewer operations than moving individual
-    tracks.
-
-    It is a greedy block-move planner: it maximizes the useful
-    contiguous target block at each first mismatch. It does not
-    claim a mathematical global minimum for arbitrary permutations,
-    but it is deterministic and optimized for the archive's
-    layered structure.
+    This is a greedy maximal-block strategy, not a claim of
+    mathematical global minimum for arbitrary permutations.
     """
 
     current = list(
@@ -1186,7 +2120,6 @@ def plan_chunked_moves(
 
     while position < len(desired):
 
-        # Already correct.
         if (
             current[position]
             == desired[position]
@@ -1209,9 +2142,6 @@ def plan_chunked_moves(
                 f"desired track {wanted}."
             )
 
-        # Find the largest contiguous block beginning at
-        # `source` that exactly matches the target beginning
-        # at `position`.
         range_length = 1
 
         while (
@@ -1238,11 +2168,6 @@ def plan_chunked_moves(
             source + range_length
         ]
 
-        # Spotify's insert_before is evaluated against the
-        # playlist after the moved range is removed.
-        #
-        # We always process the earliest mismatch and therefore
-        # source > position. Inserting at `position` is exact.
         del current[
             source:
             source + range_length
@@ -1283,11 +2208,6 @@ def execute_chunked_moves(
 ):
     """
     Execute the precomputed move plan.
-
-    Every operation moves <= 100 tracks.
-
-    Spotify returns a new snapshot after every mutation,
-    which becomes the snapshot for the next move.
     """
 
     if not operations:
@@ -1430,7 +2350,6 @@ def verify_playlist(
 
     if final_ids != desired_ids:
 
-        # Give useful diagnostic information.
         shared = min(
             len(final_ids),
             len(desired_ids),
@@ -1505,7 +2424,11 @@ def write_summary(
     pretty_count,
     target_count,
     original_count,
-    duplicate_count,
+    archive_duplicate_count,
+    archive_exact_id_duplicates,
+    archive_metadata_duplicates,
+    archive_fuzzy_duplicates,
+    destination_duplicate_count,
     removed_count,
     added_cumulative_count,
     added_pretty_count,
@@ -1526,63 +2449,89 @@ def write_summary(
     )
 
     LOGGER.add(
-        "Deduplication: exact Spotify track ID"
+        "Deduplication: exact ID + metadata + fuzzy"
     )
 
     LOGGER.add("")
 
     LOGGER.add(
-        f"Cumulative tracks:       "
+        f"Cumulative Spotify IDs:       "
         f"{cumulative_count}"
     )
 
     LOGGER.add(
-        f"Pretty tracks:            "
+        f"Pretty Spotify IDs:            "
         f"{pretty_count}"
     )
 
     LOGGER.add(
-        f"Target tracks:            "
+        f"Target tracks:                 "
         f"{target_count}"
     )
 
     LOGGER.add(
-        f"Original destination:     "
+        f"Original destination:          "
         f"{original_count}"
     )
 
+    LOGGER.add("")
+
     LOGGER.add(
-        f"Duplicate items found:    "
-        f"{duplicate_count}"
+        f"Archive duplicate total:       "
+        f"{archive_duplicate_count}"
     )
 
     LOGGER.add(
-        f"IDs removed/normalized:   "
+        f"Archive exact-ID duplicates:   "
+        f"{archive_exact_id_duplicates}"
+    )
+
+    LOGGER.add(
+        f"Archive metadata duplicates:   "
+        f"{archive_metadata_duplicates}"
+    )
+
+    LOGGER.add(
+        f"Archive fuzzy duplicates:      "
+        f"{archive_fuzzy_duplicates}"
+    )
+
+    LOGGER.add(
+        f"Destination duplicate matches: "
+        f"{destination_duplicate_count}"
+    )
+
+    LOGGER.add("")
+
+    LOGGER.add(
+        f"IDs removed/normalized:        "
         f"{removed_count}"
     )
 
     LOGGER.add(
-        f"Cumulative tracks added:  "
+        f"Cumulative tracks added:       "
         f"{added_cumulative_count}"
     )
 
     LOGGER.add(
-        f"Pretty tracks added:      "
+        f"Pretty tracks added:           "
         f"{added_pretty_count}"
     )
 
     LOGGER.add(
-        f"Final playlist:            "
+        f"Final playlist:                "
         f"{final_count}"
     )
 
+    LOGGER.add("")
+
     LOGGER.add(
-        f"Reorder operations:        "
+        f"Reorder operations:            "
         f"{reorder_operations}"
     )
 
     LOGGER.add(
-        f"Reorder duration:          "
+        f"Reorder duration:              "
         f"{reorder_duration:.2f} seconds"
     )
 
@@ -1606,7 +2555,7 @@ def main():
     )
 
     print(
-        "Deduplication: exact Spotify track ID"
+        "Deduplication: exact ID + metadata + fuzzy"
     )
 
     print(
@@ -1622,12 +2571,12 @@ def main():
     # --------------------------------------------------------
     # 1. Read PRETTY.
     #
-    # This is the authoritative current playlist order.
+    # This is authoritative current playlist order.
     # --------------------------------------------------------
 
-    pretty_ids = read_pretty()
+    pretty_tracks = read_pretty()
 
-    if not pretty_ids:
+    if not pretty_tracks:
 
         raise RuntimeError(
             "Pretty archive returned zero tracks. "
@@ -1636,8 +2585,6 @@ def main():
 
     # --------------------------------------------------------
     # 2. Read CUMULATIVE.
-    #
-    # This supplies the historical tracks.
     # --------------------------------------------------------
 
     cumulative_tracks = (
@@ -1652,33 +2599,59 @@ def main():
         )
 
     # --------------------------------------------------------
-    # 3. Build exact target.
+    # 3. Deduplicate archive.
     #
-    # PRETTY always wins the top layer.
+    # PRETTY is processed first.
     #
-    # CUMULATIVE-only tracks follow newest -> oldest.
+    # CUMULATIVE is processed newest -> oldest.
+    #
+    # Therefore:
+    #
+    #   pretty > newest cumulative
+    # --------------------------------------------------------
+
+    (
+        canonical_pretty_tracks,
+        canonical_cumulative_tracks,
+        desired_archive_tracks,
+        archive_id_to_canonical_id,
+        dedup_stats,
+    ) = deduplicate_archive(
+        pretty_tracks,
+        cumulative_tracks,
+    )
+
+    # --------------------------------------------------------
+    # 4. Build exact target.
     # --------------------------------------------------------
 
     (
         desired_ids,
         cumulative_only_ids,
     ) = build_target_order(
-        pretty_ids,
-        cumulative_tracks,
+        canonical_pretty_tracks,
+        canonical_cumulative_tracks,
     )
 
     target_set = set(
         desired_ids
     )
 
+    # All canonical archive tracks by Spotify ID.
+    archive_by_id = {
+        track["track_id"]: track
+        for track
+        in desired_archive_tracks
+    }
+
     # --------------------------------------------------------
-    # 4. Authenticate.
+    # 5. Authenticate.
     # --------------------------------------------------------
 
     token = get_access_token()
 
     # --------------------------------------------------------
-    # 5. Read destination.
+    # 6. Read destination.
     # --------------------------------------------------------
 
     current_tracks = get_playlist_items(
@@ -1697,39 +2670,35 @@ def main():
     ]
 
     # --------------------------------------------------------
-    # 6. Get current Spotify snapshot.
-    # --------------------------------------------------------
-
-    snapshot = get_playlist_snapshot(
-        token
-    )
-
-    # --------------------------------------------------------
-    # 7. Detect duplicates.
+    # 7. Find destination duplicates/replaced Spotify IDs.
+    #
+    # Example:
+    #
+    # destination:
+    #     0ZrkXUzjbmmNO8mrqK6Kc2
+    #
+    # archive canonical:
+    #     4ErJ2mnFmvQIWdsL6KNDnq
+    #
+    # The old destination ID is removed and the canonical
+    # pretty ID is subsequently added.
     # --------------------------------------------------------
 
     (
-        unique_current,
-        duplicate_items,
-    ) = find_duplicate_items(
-        current_tracks
+        destination_duplicate_ids,
+        destination_duplicate_reports,
+    ) = find_destination_duplicate_groups(
+        current_tracks,
+        archive_by_id,
+        desired_ids,
     )
 
-    report_duplicates(
-        duplicate_items
-    )
-
-    duplicate_count = len(
-        duplicate_items
+    report_destination_duplicates(
+        destination_duplicate_reports
     )
 
     # --------------------------------------------------------
-    # 8. Determine IDs that must be removed.
-    #
-    # Anything outside the target is removed.
-    #
-    # Duplicate IDs are also removed completely and then
-    # re-added exactly once during the normal addition phase.
+    # 8. Count exact duplicate IDs in destination.
     # --------------------------------------------------------
 
     counts = Counter(
@@ -1743,6 +2712,17 @@ def main():
         if count > 1
     }
 
+    # --------------------------------------------------------
+    # 9. Remove anything outside the canonical target.
+    #
+    # Also remove:
+    #
+    #   - duplicate destination IDs
+    #   - old Spotify IDs matched to canonical archive IDs
+    #
+    # The canonical ID will be restored by the normal add phase.
+    # --------------------------------------------------------
+
     extra_ids = {
         track_id
         for track_id in counts
@@ -1751,7 +2731,10 @@ def main():
 
     remove_ids = (
         duplicate_ids
-        | extra_ids
+        |
+        extra_ids
+        |
+        destination_duplicate_ids
     )
 
     print()
@@ -1761,20 +2744,31 @@ def main():
         f"{len(remove_ids)}"
     )
 
-    if duplicate_ids:
-        print(
-            f"  Duplicate IDs: "
-            f"{len(duplicate_ids)}"
-        )
+    print(
+        f"  Exact duplicate IDs: "
+        f"{len(duplicate_ids)}"
+    )
 
-    if extra_ids:
-        print(
-            f"  Destination-only IDs: "
-            f"{len(extra_ids)}"
-        )
+    print(
+        f"  Destination-only IDs: "
+        f"{len(extra_ids)}"
+    )
+
+    print(
+        f"  Archive duplicate/replacement IDs: "
+        f"{len(destination_duplicate_ids)}"
+    )
 
     # --------------------------------------------------------
-    # 9. Remove extras and duplicate IDs.
+    # 10. Get current Spotify snapshot.
+    # --------------------------------------------------------
+
+    snapshot = get_playlist_snapshot(
+        token
+    )
+
+    # --------------------------------------------------------
+    # 11. Remove extras / duplicates / replaced IDs.
     # --------------------------------------------------------
 
     (
@@ -1786,9 +2780,10 @@ def main():
         snapshot,
     )
 
-    # Simulate the exact post-removal state locally.
-    #
-    # Every occurrence of a removed ID is considered gone.
+    # --------------------------------------------------------
+    # 12. Simulate post-removal state.
+    # --------------------------------------------------------
+
     working_ids = [
         track_id
         for track_id in current_ids
@@ -1796,7 +2791,7 @@ def main():
     ]
 
     # --------------------------------------------------------
-    # 10. Add missing CUMULATIVE-only tracks first.
+    # 13. Add missing CUMULATIVE-only tracks first.
     # --------------------------------------------------------
 
     (
@@ -1812,15 +2807,10 @@ def main():
     )
 
     # --------------------------------------------------------
-    # 11. Add missing PRETTY tracks second.
+    # 14. Add missing PRETTY tracks second.
     #
-    # They are inserted at position 0.
-    #
-    # This establishes the layering:
-    #
-    #     PRETTY
-    #     --------
-    #     CUMULATIVE
+    # This ensures the current playlist is always layered on top
+    # of historical tracks.
     # --------------------------------------------------------
 
     (
@@ -1829,14 +2819,18 @@ def main():
         added_pretty_count,
         pretty_add_requests,
     ) = add_pretty_tracks(
-        pretty_ids,
+        [
+            track["track_id"]
+            for track
+            in canonical_pretty_tracks
+        ],
         working_ids,
         token,
         snapshot,
     )
 
     # --------------------------------------------------------
-    # 12. Sanity-check the local state before planning.
+    # 15. Sanity-check local state.
     # --------------------------------------------------------
 
     if (
@@ -1860,7 +2854,7 @@ def main():
         )
 
     # --------------------------------------------------------
-    # 13. Calculate exact chunked reorder plan.
+    # 16. Calculate exact chunked reorder plan.
     # --------------------------------------------------------
 
     print()
@@ -1913,7 +2907,7 @@ def main():
         )
 
     # --------------------------------------------------------
-    # 14. Execute exact move plan.
+    # 17. Execute exact move plan.
     # --------------------------------------------------------
 
     (
@@ -1927,7 +2921,7 @@ def main():
     )
 
     # --------------------------------------------------------
-    # 15. Verify exact final Spotify state.
+    # 18. Verify exact final Spotify state.
     # --------------------------------------------------------
 
     final_count = verify_playlist(
@@ -1936,7 +2930,7 @@ def main():
     )
 
     # --------------------------------------------------------
-    # 16. Write log.
+    # 19. Write log.
     # --------------------------------------------------------
 
     write_summary(
@@ -1944,13 +2938,35 @@ def main():
             cumulative_tracks
         ),
         pretty_count=len(
-            pretty_ids
+            pretty_tracks
         ),
         target_count=len(
             desired_ids
         ),
         original_count=original_count,
-        duplicate_count=duplicate_count,
+        archive_duplicate_count=(
+            dedup_stats[
+                "total_duplicates"
+            ]
+        ),
+        archive_exact_id_duplicates=(
+            dedup_stats[
+                "duplicate_id"
+            ]
+        ),
+        archive_metadata_duplicates=(
+            dedup_stats[
+                "duplicate_metadata"
+            ]
+        ),
+        archive_fuzzy_duplicates=(
+            dedup_stats[
+                "duplicate_fuzzy"
+            ]
+        ),
+        destination_duplicate_count=len(
+            destination_duplicate_reports
+        ),
         removed_count=len(
             remove_ids
         ),
