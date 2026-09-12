@@ -1,16 +1,23 @@
 ============================================================
 Spotify Playlist Archive Sync
 PRETTY order -> CUMULATIVE history
-Deduplication: exact Spotify track ID
+Deduplication: exact ID + metadata + fuzzy
 
-Cumulative tracks:       1520
-Pretty tracks:            100
-Target tracks:            1520
-Original destination:     1476
-Duplicate items found:    0
-IDs removed/normalized:   0
-Cumulative tracks added:  43
-Pretty tracks added:      1
-Final playlist:            1520
-Reorder operations:        135
-Reorder duration:          40.30 seconds
+Cumulative Spotify IDs:       1525
+Pretty Spotify IDs:            100
+Target tracks:                 1525
+Original destination:          1525
+
+Archive duplicate total:       100
+Archive exact-ID duplicates:   100
+Archive metadata duplicates:   0
+Archive fuzzy duplicates:      0
+Destination duplicate matches: 0
+
+IDs removed/normalized:        0
+Cumulative tracks added:       0
+Pretty tracks added:           0
+Final playlist:                1525
+
+Reorder operations:            0
+Reorder duration:              0.00 seconds
