@@ -19,5 +19,5 @@ Cumulative tracks added:       0
 Pretty tracks added:           0
 Final playlist:                1232
 
-Reorder operations:            55
-Reorder duration:              18.77 seconds
+Reorder operations:            48
+Reorder duration:              12.50 seconds
