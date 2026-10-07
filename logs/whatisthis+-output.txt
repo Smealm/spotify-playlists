@@ -1,0 +1,98 @@
+======================================================================
+Spotify Playlist Reorder
+Newest Added -> Oldest Added
+Started: 2026-10-07T19:38:10.653137+00:00
+======================================================================
+Authenticating with Spotify...
+Authentication successful.
+
+Playlist: what is this +
+Owner: Smealm
+Playlist ID: 1PNK5SF5TClIEUJ5ZrTa6Q
+
+Fetching playlist items...
+
+Found 53 playlist items.
+
+Desired order (first 10):
+----------------------------------------------------------------------
+  1. Whatever Brought Us Here - Aether
+     added_at=2026-10-07T19:27:10Z
+  2. Open Spaces - VIP - Just A Gent, Nevve
+     added_at=2026-10-07T19:26:46Z
+  3. Lonely - Aether
+     added_at=2026-09-19T22:02:27Z
+  4. Miracle - Madeon
+     added_at=2026-08-24T17:32:03Z
+  5. All My Friends - Madeon
+     added_at=2026-08-24T17:30:57Z
+  6. When I'm Gone - PEEKABOO, XAELO
+     added_at=2026-08-08T20:49:13Z
+  7. Face My Fears (English Version) - Hikaru Utada, Skrillex
+     added_at=2026-08-08T20:42:05Z
+  8. 2 Me - smle, Kiddo A.I., Nick Smith
+     added_at=2026-08-08T00:06:46Z
+  9. Big Lie - Post Malone
+     added_at=2026-08-07T23:50:27Z
+ 10. White Iverson - Post Malone
+     added_at=2026-08-07T23:46:16Z
+... and 43 more
+----------------------------------------------------------------------
+
+Reordering playlist...
+Move   53 ->    1 | Whatever Brought Us Here - Aether | added_at=2026-10-07T19:27:10Z
+Move   53 ->    2 | Open Spaces - VIP - Just A Gent, Nevve | added_at=2026-10-07T19:26:46Z
+Move   53 ->    3 | Lonely - Aether | added_at=2026-09-19T22:02:27Z
+Move   53 ->    4 | Miracle - Madeon | added_at=2026-08-24T17:32:03Z
+Move   53 ->    5 | All My Friends - Madeon | added_at=2026-08-24T17:30:57Z
+Move   53 ->    6 | When I'm Gone - PEEKABOO, XAELO | added_at=2026-08-08T20:49:13Z
+Move   53 ->    7 | Face My Fears (English Version) - Hikaru Utada, Skrillex | added_at=2026-08-08T20:42:05Z
+Move   53 ->    8 | 2 Me - smle, Kiddo A.I., Nick Smith | added_at=2026-08-08T00:06:46Z
+Move   53 ->    9 | Big Lie - Post Malone | added_at=2026-08-07T23:50:27Z
+Move   49 ->   10 | White Iverson - Post Malone | added_at=2026-08-07T23:46:16Z
+Move   53 ->   11 | Feel It (From “Invincible”) - d4vd | added_at=2026-04-21T01:57:16Z
+Move   53 ->   12 | Crystal Skies - VXLLAIN, iGRES, ENXK | added_at=2025-07-09T20:58:46Z
+Move   53 ->   13 | Simple & Clean - imprintafter flip - Imprintafter | added_at=2025-05-26T00:33:15Z
+Move   53 ->   14 | nagareboshi - AKIBA | added_at=2025-03-31T20:23:26Z
+Move   53 ->   15 | Lines of the Broken - DROELOE, San Holo, CUT_ | added_at=2024-11-27T01:06:10Z
+Move   53 ->   16 | FORMATIONS - Mild Minds | added_at=2024-11-23T19:29:38Z
+Move   53 ->   17 | Just Doin' Me - MOONBOY, Z3LLA | added_at=2024-11-14T02:33:22Z
+Move   53 ->   18 | WISH YOU WELL - OddKidOut, ellie d. | added_at=2024-10-23T19:52:11Z
+Move   53 ->   19 | Wastin Time - Conro | added_at=2024-10-15T18:57:08Z
+Move   53 ->   20 | Metamodernity - Vansire | added_at=2024-01-09T14:34:39Z
+Move   53 ->   22 | Japan - Throttle | added_at=2023-11-10T19:54:00Z
+Move   53 ->   23 | Love You Back - Madeon | added_at=2023-10-29T23:07:42Z
+Move   53 ->   24 | WAIT (feat. Bipolar Sunshine) - MILKBLOOD, Bipolar Sunshine | added_at=2023-09-24T17:48:58Z
+Move   53 ->   25 | Circles - Post Malone | added_at=2023-09-14T01:30:10Z
+Move   53 ->   26 | Waiting for You - Dan Mason ダン·メイソン | added_at=2023-08-21T00:42:42Z
+Move   53 ->   27 | emotionless. mind gone - AKIBA | added_at=2023-08-21T00:34:29Z
+Move   53 ->   28 | Give You Up - Koven | added_at=2023-08-21T00:28:42Z
+Move   53 ->   30 | Dead to Me - Terror Reid, Getter | added_at=2023-08-20T02:12:28Z
+Move   53 ->   31 | Aloe Lite - Good Kid | added_at=2023-08-20T02:06:38Z
+Move   53 ->   32 | on & on - piri, Tommy Villiers, piri & tommy | added_at=2023-08-20T02:05:00Z
+Move   53 ->   33 | Lady - Hear Me Tonight - Modjo | added_at=2023-08-17T19:13:35Z
+Move   53 ->   34 | Wrapped Around Your Finger - Post Malone | added_at=2023-08-15T16:24:56Z
+Move   52 ->   35 | That I Miss You - Vansire | added_at=2023-08-15T13:11:03Z
+Move   52 ->   36 | Middle - DJ Snake, Bipolar Sunshine | added_at=2023-08-15T13:10:07Z
+Move   52 ->   37 | Ocean Man - Ween | added_at=2023-08-15T13:10:04Z
+Move   52 ->   38 | Everybody Wants To Rule The World - Tears For Fears | added_at=2023-08-15T13:09:59Z
+Move   52 ->   39 | Would You Ever - Skrillex, Poo Bear | added_at=2023-08-15T13:09:21Z
+Move   52 ->   40 | Lose My Mind (feat. Mr Gabriel) - Jai Wolf | added_at=2023-08-15T13:09:05Z
+Move   52 ->   41 | Hold On (feat. Drew Love) - Rynx, Drew Love | added_at=2023-08-15T13:09:00Z
+Move   52 ->   42 | Music Sounds Better With You - Stardust, Benjamin Diamond, Alan Braxe, Thomas Bangalter | added_at=2023-08-15T13:08:55Z
+Move   52 ->   43 | Riptide - Vance Joy | added_at=2023-08-15T13:08:50Z
+Move   52 ->   44 | Out of My League - Fitz and The Tantrums | added_at=2023-08-15T13:08:47Z
+Move   52 ->   45 | Burning - Snakehips Remix - Gorgon City, EVAN GIIA, Snakehips | added_at=2023-08-15T13:02:43Z
+Move   52 ->   46 | two nights part ii (Lykke Li x Skrillex x Ty Dolla $ign) - Lykke Li, Skrillex | added_at=2023-08-15T13:02:32Z
+Move   53 ->   47 | Solitude (with BIA & Lucky Daye) - Snakehips, BIA, Lucky Daye | added_at=2023-08-15T13:02:29Z
+Move   49 ->   48 | Ironheart - Polar Youth Remix - Flux Pavilion, BullySongs, Polar Youth | added_at=2023-08-15T13:02:22Z
+Move   53 ->   49 | Resonance - Home | added_at=2023-08-15T13:01:56Z
+Move   53 ->   50 | Lost & Found - Telomic Remix - Telomic, NCT, Dualistic | added_at=2023-08-12T12:24:18Z
+Move   53 ->   51 | Young Blood - The Naked And Famous | added_at=2023-08-12T12:23:41Z
+Move   53 ->   52 | Die For You - Joji | added_at=2023-08-10T02:14:29Z
+
+======================================================================
+Finished successfully. 50 item(s) moved.
+Playlist is now newest added -> oldest added.
+Finished: 2026-10-07T19:38:23.676297+00:00
+======================================================================
