@@ -1493,3 +1493,52 @@ Finished successfully. 5 item(s) moved.
 Playlist is now newest added -> oldest added.
 Finished: 2026-10-08T21:05:00.022833+00:00
 ======================================================================
+======================================================================
+Spotify Playlist Reorder
+Newest Added -> Oldest Added
+Started: 2026-10-09T20:35:59.593427+00:00
+======================================================================
+Authenticating with Spotify...
+Authentication successful.
+
+Playlist: what is this
+Owner: Smealm
+Playlist ID: 5sahCBpr8p5Bzte0QgB4gh
+
+Fetching playlist items...
+
+Found 1448 playlist items.
+
+Desired order (first 10):
+----------------------------------------------------------------------
+  1. Flip It - Tape B Remix - Levity, Tape B, Dem Jointz
+     added_at=2026-10-08T23:44:46Z
+  2. Gloss (feat. y3kfae) - Daniel Allan, y3kfae
+     added_at=2026-10-08T20:14:24Z
+  3. Stealing Fire - Virtual Riot
+     added_at=2026-10-08T20:06:51Z
+  4. move ting - Skrillex, Moody Good, Nakeesha
+     added_at=2026-10-08T20:03:31Z
+  5. RESCUE U - Alison Wonderland, WINK
+     added_at=2026-10-08T20:03:02Z
+  6. ONE FOR YOU - ALLEYCVT, Levity
+     added_at=2026-10-04T01:21:04Z
+  7. Forever - Marshmello, pluko
+     added_at=2026-09-05T22:15:01Z
+  8. Open Spaces - VIP - Just A Gent, Nevve
+     added_at=2026-08-23T20:16:38Z
+  9. Swagger's Soulstice (Outro) - SwaggerSouls
+     added_at=2026-01-08T01:18:29Z
+ 10. Sound of You (Mixed) - Pendulum, Armin van Buuren, Rob Swire
+     added_at=2025-12-19T17:20:13Z
+... and 1438 more
+----------------------------------------------------------------------
+
+Reordering playlist...
+Move 1448 ->    1 | Flip It - Tape B Remix - Levity, Tape B, Dem Jointz | added_at=2026-10-08T23:44:46Z
+
+======================================================================
+Finished successfully. 1 item(s) moved.
+Playlist is now newest added -> oldest added.
+Finished: 2026-10-09T20:36:09.303363+00:00
+======================================================================
