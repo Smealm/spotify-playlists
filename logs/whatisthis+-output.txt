@@ -132,3 +132,21 @@ Found 49 playlist items.
 
 Playlist is already sorted newest -> oldest.
 No Spotify changes were necessary.
+======================================================================
+Spotify Playlist Reorder
+Newest Added -> Oldest Added
+Started: 2026-10-10T19:38:34.466287+00:00
+======================================================================
+Authenticating with Spotify...
+Authentication successful.
+
+Playlist: what is this +
+Owner: Smealm
+Playlist ID: 1PNK5SF5TClIEUJ5ZrTa6Q
+
+Fetching playlist items...
+
+Found 49 playlist items.
+
+Playlist is already sorted newest -> oldest.
+No Spotify changes were necessary.
