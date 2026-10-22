@@ -1822,3 +1822,52 @@ Found 1450 playlist items.
 
 Playlist is already sorted newest -> oldest.
 No Spotify changes were necessary.
+======================================================================
+Spotify Playlist Reorder
+Newest Added -> Oldest Added
+Started: 2026-10-22T19:47:43.097802+00:00
+======================================================================
+Authenticating with Spotify...
+Authentication successful.
+
+Playlist: what is this
+Owner: Smealm
+Playlist ID: 5sahCBpr8p5Bzte0QgB4gh
+
+Fetching playlist items...
+
+Found 1450 playlist items.
+
+Desired order (first 10):
+----------------------------------------------------------------------
+  1. Melting over You - Slushii
+     added_at=2026-10-22T00:53:02Z
+  2. in my dreams - AVELLO, Abi Flynn
+     added_at=2026-10-18T15:11:00Z
+  3. Fall - Dillon Francis
+     added_at=2026-10-11T19:31:26Z
+  4. Gloss (feat. y3kfae) - Daniel Allan, y3kfae
+     added_at=2026-10-11T17:28:49Z
+  5. Stealing Fire - Virtual Riot
+     added_at=2026-10-08T20:06:51Z
+  6. move ting - Skrillex, Moody Good, Nakeesha
+     added_at=2026-10-08T20:03:31Z
+  7. RESCUE U - Alison Wonderland, WINK
+     added_at=2026-10-08T20:03:02Z
+  8. ONE FOR YOU - ALLEYCVT, Levity
+     added_at=2026-10-04T01:21:04Z
+  9. Forever - Marshmello, pluko
+     added_at=2026-09-05T22:15:01Z
+ 10. Open Spaces - VIP - Just A Gent, Nevve
+     added_at=2026-08-23T20:16:38Z
+... and 1440 more
+----------------------------------------------------------------------
+
+Reordering playlist...
+Move 1450 ->    1 | Melting over You - Slushii | added_at=2026-10-22T00:53:02Z
+
+======================================================================
+Finished successfully. 1 item(s) moved.
+Playlist is now newest added -> oldest added.
+Finished: 2026-10-22T19:47:52.421279+00:00
+======================================================================
