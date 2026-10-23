@@ -398,3 +398,52 @@ Found 44 playlist items.
 
 Playlist is already sorted newest -> oldest.
 No Spotify changes were necessary.
+======================================================================
+Spotify Playlist Reorder
+Newest Added -> Oldest Added
+Started: 2026-10-23T19:39:16.004445+00:00
+======================================================================
+Authenticating with Spotify...
+Authentication successful.
+
+Playlist: what is this +
+Owner: Smealm
+Playlist ID: 1PNK5SF5TClIEUJ5ZrTa6Q
+
+Fetching playlist items...
+
+Found 45 playlist items.
+
+Desired order (first 10):
+----------------------------------------------------------------------
+  1. Sunflower - Spider-Man: Into the Spider-Verse - Post Malone, Swae Lee
+     added_at=2026-10-23T01:05:51Z
+  2. Shelter - Porter Robinson, Madeon
+     added_at=2026-10-11T17:53:24Z
+  3. Nights On Fire (2024) - Virtual Riot
+     added_at=2026-10-08T20:07:51Z
+  4. All My Friends - Madeon
+     added_at=2026-08-24T17:30:57Z
+  5. When I'm Gone - PEEKABOO, XAELO
+     added_at=2026-08-08T20:49:13Z
+  6. 2 Me - smle, Kiddo A.I., Nick Smith
+     added_at=2026-08-08T00:06:46Z
+  7. White Iverson - Post Malone
+     added_at=2026-08-07T23:46:16Z
+  8. Feel It (From “Invincible”) - d4vd
+     added_at=2026-04-21T01:57:16Z
+  9. Crystal Skies - VXLLAIN, iGRES, ENXK
+     added_at=2025-07-09T20:58:46Z
+ 10. nagareboshi - AKIBA
+     added_at=2025-03-31T20:23:26Z
+... and 35 more
+----------------------------------------------------------------------
+
+Reordering playlist...
+Move   45 ->    1 | Sunflower - Spider-Man: Into the Spider-Verse - Post Malone, Swae Lee | added_at=2026-10-23T01:05:51Z
+
+======================================================================
+Finished successfully. 1 item(s) moved.
+Playlist is now newest added -> oldest added.
+Finished: 2026-10-23T19:39:17.541825+00:00
+======================================================================
