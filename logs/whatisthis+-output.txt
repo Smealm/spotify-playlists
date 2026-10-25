@@ -465,3 +465,52 @@ Found 45 playlist items.
 
 Playlist is already sorted newest -> oldest.
 No Spotify changes were necessary.
+======================================================================
+Spotify Playlist Reorder
+Newest Added -> Oldest Added
+Started: 2026-10-25T18:38:00.765845+00:00
+======================================================================
+Authenticating with Spotify...
+Authentication successful.
+
+Playlist: what is this +
+Owner: Smealm
+Playlist ID: 1PNK5SF5TClIEUJ5ZrTa6Q
+
+Fetching playlist items...
+
+Found 46 playlist items.
+
+Desired order (first 10):
+----------------------------------------------------------------------
+  1. Lonely - Aether
+     added_at=2026-10-24T23:21:57Z
+  2. LONELY - Eyezic
+     added_at=2026-10-24T20:24:17Z
+  3. Sunflower - Spider-Man: Into the Spider-Verse - Post Malone, Swae Lee
+     added_at=2026-10-23T01:05:51Z
+  4. Shelter - Porter Robinson, Madeon
+     added_at=2026-10-11T17:53:24Z
+  5. Nights On Fire (2024) - Virtual Riot
+     added_at=2026-10-08T20:07:51Z
+  6. All My Friends - Madeon
+     added_at=2026-08-24T17:30:57Z
+  7. When I'm Gone - PEEKABOO, XAELO
+     added_at=2026-08-08T20:49:13Z
+  8. 2 Me - smle, Kiddo A.I., Nick Smith
+     added_at=2026-08-08T00:06:46Z
+  9. White Iverson - Post Malone
+     added_at=2026-08-07T23:46:16Z
+ 10. Feel It (From “Invincible”) - d4vd
+     added_at=2026-04-21T01:57:16Z
+... and 36 more
+----------------------------------------------------------------------
+
+Reordering playlist...
+Move   46 ->    1 | Lonely - Aether | added_at=2026-10-24T23:21:57Z
+
+======================================================================
+Finished successfully. 1 item(s) moved.
+Playlist is now newest added -> oldest added.
+Finished: 2026-10-25T18:38:01.744968+00:00
+======================================================================
