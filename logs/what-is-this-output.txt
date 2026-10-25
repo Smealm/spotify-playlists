@@ -1907,3 +1907,52 @@ Found 1450 playlist items.
 
 Playlist is already sorted newest -> oldest.
 No Spotify changes were necessary.
+======================================================================
+Spotify Playlist Reorder
+Newest Added -> Oldest Added
+Started: 2026-10-25T18:45:51.267605+00:00
+======================================================================
+Authenticating with Spotify...
+Authentication successful.
+
+Playlist: what is this
+Owner: Smealm
+Playlist ID: 5sahCBpr8p5Bzte0QgB4gh
+
+Fetching playlist items...
+
+Found 1451 playlist items.
+
+Desired order (first 10):
+----------------------------------------------------------------------
+  1. LONELY - Eyezic
+     added_at=2026-10-24T20:21:28Z
+  2. Melting over You - Slushii
+     added_at=2026-10-22T00:53:02Z
+  3. in my dreams - AVELLO, Abi Flynn
+     added_at=2026-10-18T15:11:00Z
+  4. Fall - Dillon Francis
+     added_at=2026-10-11T19:31:26Z
+  5. Gloss (feat. y3kfae) - Daniel Allan, y3kfae
+     added_at=2026-10-11T17:28:49Z
+  6. Stealing Fire - Virtual Riot
+     added_at=2026-10-08T20:06:51Z
+  7. move ting - Skrillex, Moody Good, Nakeesha
+     added_at=2026-10-08T20:03:31Z
+  8. RESCUE U - Alison Wonderland, WINK
+     added_at=2026-10-08T20:03:02Z
+  9. ONE FOR YOU - ALLEYCVT, Levity
+     added_at=2026-10-04T01:21:04Z
+ 10. Forever - Marshmello, pluko
+     added_at=2026-09-05T22:15:01Z
+... and 1441 more
+----------------------------------------------------------------------
+
+Reordering playlist...
+Move 1451 ->    1 | LONELY - Eyezic | added_at=2026-10-24T20:21:28Z
+
+======================================================================
+Finished successfully. 1 item(s) moved.
+Playlist is now newest added -> oldest added.
+Finished: 2026-10-25T18:45:59.598200+00:00
+======================================================================
