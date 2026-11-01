@@ -6,7 +6,7 @@ Deduplication: exact ID + metadata + fuzzy
 Cumulative Spotify IDs:       1245
 Pretty Spotify IDs:            200
 Target tracks:                 1245
-Original destination:          1244
+Original destination:          1245
 
 Archive duplicate total:       200
 Archive exact-ID duplicates:   200
@@ -16,8 +16,8 @@ Destination duplicate matches: 0
 
 IDs removed/normalized:        0
 Cumulative tracks added:       0
-Pretty tracks added:           1
+Pretty tracks added:           0
 Final playlist:                1245
 
-Reorder operations:            69
-Reorder duration:              21.42 seconds
+Reorder operations:            44
+Reorder duration:              10.76 seconds
