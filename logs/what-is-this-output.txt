@@ -2172,3 +2172,56 @@ Found 1451 playlist items.
 
 Playlist is already sorted newest -> oldest.
 No Spotify changes were necessary.
+======================================================================
+Spotify Playlist Reorder
+Newest Added -> Oldest Added
+Started: 2026-11-07T19:57:13.802407+00:00
+======================================================================
+Authenticating with Spotify...
+Authentication successful.
+
+Playlist: what is this
+Owner: Smealm
+Playlist ID: 5sahCBpr8p5Bzte0QgB4gh
+
+Fetching playlist items...
+
+Found 1456 playlist items.
+
+Desired order (first 10):
+----------------------------------------------------------------------
+  1. Be Right There - Diplo, Sleepy Tom
+     added_at=2026-11-07T18:12:24Z
+  2. Lean On - Major Lazer, DJ Snake, MØ, Diplo
+     added_at=2026-11-07T18:11:51Z
+  3. Summertime - Skrillex, Kid Cudi
+     added_at=2026-11-07T18:06:14Z
+  4. Way Back - Skrillex, PinkPantheress, Trippie Redd
+     added_at=2026-11-07T18:05:59Z
+  5. Where Are Ü Now (with Justin Bieber) - Jack Ü, Skrillex, Diplo, Justin Bieber
+     added_at=2026-11-07T18:05:12Z
+  6. LONELY - Eyezic
+     added_at=2026-10-24T20:21:28Z
+  7. Melting over You - Slushii
+     added_at=2026-10-22T00:53:02Z
+  8. in my dreams - AVELLO, Abi Flynn
+     added_at=2026-10-18T15:11:00Z
+  9. Fall - Dillon Francis
+     added_at=2026-10-11T19:31:26Z
+ 10. Gloss (feat. y3kfae) - Daniel Allan, y3kfae
+     added_at=2026-10-11T17:28:49Z
+... and 1446 more
+----------------------------------------------------------------------
+
+Reordering playlist...
+Move 1456 ->    1 | Be Right There - Diplo, Sleepy Tom | added_at=2026-11-07T18:12:24Z
+Move 1456 ->    2 | Lean On - Major Lazer, DJ Snake, MØ, Diplo | added_at=2026-11-07T18:11:51Z
+Move 1456 ->    3 | Summertime - Skrillex, Kid Cudi | added_at=2026-11-07T18:06:14Z
+Move 1456 ->    4 | Way Back - Skrillex, PinkPantheress, Trippie Redd | added_at=2026-11-07T18:05:59Z
+Move 1456 ->    5 | Where Are Ü Now (with Justin Bieber) - Jack Ü, Skrillex, Diplo, Justin Bieber | added_at=2026-11-07T18:05:12Z
+
+======================================================================
+Finished successfully. 5 item(s) moved.
+Playlist is now newest added -> oldest added.
+Finished: 2026-11-07T19:57:24.534921+00:00
+======================================================================
