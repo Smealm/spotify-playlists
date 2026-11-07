@@ -762,3 +762,55 @@ Found 45 playlist items.
 
 Playlist is already sorted newest -> oldest.
 No Spotify changes were necessary.
+======================================================================
+Spotify Playlist Reorder
+Newest Added -> Oldest Added
+Started: 2026-11-07T19:44:47.324625+00:00
+======================================================================
+Authenticating with Spotify...
+Authentication successful.
+
+Playlist: what is this +
+Owner: Smealm
+Playlist ID: 1PNK5SF5TClIEUJ5ZrTa6Q
+
+Fetching playlist items...
+
+Found 49 playlist items.
+
+Desired order (first 10):
+----------------------------------------------------------------------
+  1. Be Right There - Diplo, Sleepy Tom
+     added_at=2026-11-07T18:12:26Z
+  2. Summertime - Skrillex, Kid Cudi
+     added_at=2026-11-07T18:06:19Z
+  3. Way Back - Skrillex, PinkPantheress, Trippie Redd
+     added_at=2026-11-07T18:06:00Z
+  4. Where Are Ü Now (with Justin Bieber) - Jack Ü, Skrillex, Diplo, Justin Bieber
+     added_at=2026-11-07T18:05:16Z
+  5. Lonely - Aether
+     added_at=2026-10-24T23:21:57Z
+  6. LONELY - Eyezic
+     added_at=2026-10-24T20:24:17Z
+  7. Sunflower - Spider-Man: Into the Spider-Verse - Post Malone, Swae Lee
+     added_at=2026-10-23T01:05:51Z
+  8. Shelter - Porter Robinson, Madeon
+     added_at=2026-10-11T17:53:24Z
+  9. All My Friends - Madeon
+     added_at=2026-08-24T17:30:57Z
+ 10. When I'm Gone - PEEKABOO, XAELO
+     added_at=2026-08-08T20:49:13Z
+... and 39 more
+----------------------------------------------------------------------
+
+Reordering playlist...
+Move   49 ->    1 | Be Right There - Diplo, Sleepy Tom | added_at=2026-11-07T18:12:26Z
+Move   49 ->    2 | Summertime - Skrillex, Kid Cudi | added_at=2026-11-07T18:06:19Z
+Move   49 ->    3 | Way Back - Skrillex, PinkPantheress, Trippie Redd | added_at=2026-11-07T18:06:00Z
+Move   49 ->    4 | Where Are Ü Now (with Justin Bieber) - Jack Ü, Skrillex, Diplo, Justin Bieber | added_at=2026-11-07T18:05:16Z
+
+======================================================================
+Finished successfully. 4 item(s) moved.
+Playlist is now newest added -> oldest added.
+Finished: 2026-11-07T19:44:49.606647+00:00
+======================================================================
