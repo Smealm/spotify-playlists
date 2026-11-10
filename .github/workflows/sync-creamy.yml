@@ -4,50 +4,21 @@ on:
   workflow_dispatch:
 
   schedule:
-    - cron: "10 16 * * *"
+    # GitHub cron is UTC and cannot follow daylight saving, so both 2 PM
+    # offsets are scheduled and the shared workflow keeps the matching one.
+    # 18:00 UTC = 2 PM EDT (summer), 19:00 UTC = 2 PM EST (winter).
+    - cron: "0 18 * * *"
+    - cron: "0 19 * * *"
 
 jobs:
-  sync-creamy:
-    runs-on: ubuntu-latest
-
+  sync:
     permissions:
       contents: write
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install requests
-
-      - name: Sync Creamy archive
-        env:
-          SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
-          SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
-          SPOTIFY_REFRESH_TOKEN: ${{ secrets.SPOTIFY_REFRESH_TOKEN }}
-        run: |
-          python archive-playlists.py \
-            --archive-playlist-id "37i9dQZF1DXdgz8ZB7c2CP" \
-            --destination-playlist-id "0d9fkV0DPxsq5Ag7IP8obL" \
-            --log "logs/creamy-output.txt"
-
-      - name: Commit updated log
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          git add logs/creamy-output.txt
-
-          if git diff --cached --quiet; then
-            echo "No log changes to commit."
-          else
-            git commit -m "Update Creamy archive log"
-            git push
-          fi
+    uses: ./.github/workflows/_playlist-sync.yml
+    with:
+      label: Creamy
+      script: archive-playlists.py
+      archive_playlist_id: "37i9dQZF1DXdgz8ZB7c2CP"
+      destination_playlist_id: "0d9fkV0DPxsq5Ag7IP8obL"
+      log_path: logs/creamy-output.txt
+    secrets: inherit

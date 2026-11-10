@@ -1,0 +1,128 @@
+name: Playlist Sync (reusable)
+
+# Shared implementation for every playlist job. Callers provide the IDs and
+# the schedule; this file keeps the run, the 2 PM Eastern window check and the
+# log commit identical for all of them.
+
+on:
+  workflow_call:
+    inputs:
+      label:
+        description: Playlist name used in logs and commit messages.
+        required: true
+        type: string
+      script:
+        description: Script to run from the repository root.
+        required: true
+        type: string
+      destination_playlist_id:
+        description: Playlist that gets maintained.
+        required: true
+        type: string
+      log_path:
+        description: Log file to write and commit.
+        required: true
+        type: string
+      archive_playlist_id:
+        description: Source playlist archived by spotifyplaylistarchive.com. Empty for reorder-only jobs.
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: playlist-sync-${{ inputs.label }}
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check the 2 PM Eastern window
+        id: window
+        run: |
+          # GitHub cron always runs in UTC and cannot follow daylight saving.
+          # Callers schedule 18:00 UTC (2 PM EDT) and 19:00 UTC (2 PM EST);
+          # this gate keeps whichever one lands on 2 PM in New York.
+          if [ "${{ github.event_name }}" != "schedule" ]; then
+            echo "Manual run, skipping the window check."
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          hour="$(TZ=America/New_York date +%H)"
+          echo "America/New_York hour: ${hour}"
+
+          if [ "${hour}" = "14" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "Outside the 2 PM Eastern window (DST overlap); skipping."
+          fi
+
+      - name: Checkout repository
+        if: steps.window.outputs.run == 'true'
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        if: steps.window.outputs.run == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        if: steps.window.outputs.run == 'true'
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run ${{ inputs.label }}
+        if: steps.window.outputs.run == 'true'
+        env:
+          SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
+          SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
+          SPOTIFY_REFRESH_TOKEN: ${{ secrets.SPOTIFY_REFRESH_TOKEN }}
+        run: |
+          args=(
+            --destination-playlist-id "${{ inputs.destination_playlist_id }}"
+            --log "${{ inputs.log_path }}"
+          )
+
+          if [ -n "${{ inputs.archive_playlist_id }}" ]; then
+            args+=(--archive-playlist-id "${{ inputs.archive_playlist_id }}")
+          fi
+
+          python "${{ inputs.script }}" "${args[@]}"
+
+      - name: Commit updated log
+        if: steps.window.outputs.run == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add -- "${{ inputs.log_path }}"
+
+          if git diff --cached --quiet; then
+            echo "No log changes to commit."
+            exit 0
+          fi
+
+          git commit -m "Update ${{ inputs.label }} log"
+
+          # Every playlist syncs around the same minute and commits its own log
+          # file, so a plain push can lose the race against another job.
+          for attempt in 1 2 3 4 5; do
+            if git push; then
+              exit 0
+            fi
+
+            echo "Push rejected, rebasing on the latest main (attempt ${attempt})..."
+            git pull --rebase --autostash origin main
+          done
+
+          echo "Could not push the log after 5 attempts." >&2
+          exit 1
