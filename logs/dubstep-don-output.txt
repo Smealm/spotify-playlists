@@ -1,23 +1,36 @@
-============================================================
+======================================================================
 Spotify Playlist Archive Sync
-PRETTY order -> CUMULATIVE history
-Deduplication: exact ID + metadata + fuzzy
+Current playlist order on top, full history below
+Duplicates: same Spotify ID, or same name/artist/duration
+Started: 2026-11-10T17:00:11.468389+00:00
+======================================================================
 
-Cumulative Spotify IDs:       1648
-Pretty Spotify IDs:            200
-Target tracks:                 1648
-Original destination:          1648
+Reading the archived history...
+History tracks: 1648 unique Spotify IDs
 
-Archive duplicate total:       200
-Archive exact-ID duplicates:   200
-Archive metadata duplicates:   0
-Archive fuzzy duplicates:      0
-Destination duplicate matches: 0
+Authenticating with Spotify...
 
-IDs removed/normalized:        0
-Cumulative tracks added:       0
-Pretty tracks added:           0
-Final playlist:                1648
+Reading the source playlist's current order...
+Live source playlist unavailable: GET https://api.spotify.com/v1/playlists/37i9dQZF1DX5Q27plkaOQ3/items failed (404): {"error": {"status": 404, "message": "Resource not found" } }
+Falling back to the archive's pretty snapshot.
+Current order tracks: 200
+Target archive: 1631 unique tracks
+Duplicates dropped: 217 (same id: 200, same name/artist/duration: 17)
 
-Reorder operations:            38
-Reorder duration:              13.39 seconds
+Reading the archive playlist...
+Archive playlist before: 1631 item(s)
+No tracks are missing from the archive playlist.
+Reorder plan: 0 operation(s) for 1631 item(s).
+Playlist is already in the desired order.
+
+Verifying the archive playlist...
+Verification passed: 1631 tracks in order.
+
+======================================================================
+Archive tracks: 1631
+Items removed: 0
+Tracks added: 0
+Reorder operations: 0
+Reorder duration: 0.00 seconds
+Finished: 2026-11-10T17:00:57.456552+00:00 (46.0s total)
+======================================================================
