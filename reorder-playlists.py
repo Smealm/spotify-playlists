@@ -1,598 +1,331 @@
 #!/usr/bin/env python3
+"""Sort a Spotify playlist so the newest additions come first.
+
+Duplicate entries are removed first, using the same rule as
+JMPerez/spotify-dedup: same Spotify ID, or same name + primary artist with a
+duration within 2 seconds. Entries are then ordered by their ``added_at``
+timestamp, newest first.
+
+Usage:
+    python reorder-playlists.py \
+        --destination-playlist-id 5sahCBpr8p5Bzte0QgB4gh \
+        --log logs/what-is-this-output.txt
+"""
+
+from __future__ import annotations
 
 import argparse
-import os
-import sys
 import time
+from collections import Counter
 from datetime import datetime, timezone
 
-import requests
+from spotify_utils import (
+    BATCH_SIZE,
+    Logger,
+    Spotify,
+    apply_moves,
+    find_duplicates,
+    get_access_token,
+    plan_moves,
+    playlist_entry_track,
+    remove_playlist_positions,
+    track_from_spotify,
+)
+
+UNMANAGED_PREFIX = "@unmanaged:"
+EPOCH = datetime.min.replace(tzinfo=timezone.utc)
 
 
-SPOTIFY_ACCOUNTS_URL = "https://accounts.spotify.com/api/token"
-SPOTIFY_API_URL = "https://api.spotify.com/v1"
-
-
-# ============================================================
-# LOGGING
-# ============================================================
-
-class Logger:
-    def __init__(self, path):
-        self.path = path
-
-        if self.path:
-            directory = os.path.dirname(self.path)
-
-            if directory:
-                os.makedirs(directory, exist_ok=True)
-
-    def write(self, message=""):
-        print(message)
-
-        if self.path:
-            with open(self.path, "a", encoding="utf-8") as file:
-                file.write(message + "\n")
-
-
-# ============================================================
-# SPOTIFY AUTH
-# ============================================================
-
-def get_access_token():
-    client_id = os.environ.get("SPOTIFY_CLIENT_ID")
-    client_secret = os.environ.get("SPOTIFY_CLIENT_SECRET")
-    refresh_token = os.environ.get("SPOTIFY_REFRESH_TOKEN")
-
-    missing = []
-
-    if not client_id:
-        missing.append("SPOTIFY_CLIENT_ID")
-
-    if not client_secret:
-        missing.append("SPOTIFY_CLIENT_SECRET")
-
-    if not refresh_token:
-        missing.append("SPOTIFY_REFRESH_TOKEN")
-
-    if missing:
-        raise RuntimeError(
-            "Missing required environment variable(s): "
-            + ", ".join(missing)
-        )
-
-    response = requests.post(
-        SPOTIFY_ACCOUNTS_URL,
-        data={
-            "grant_type": "refresh_token",
-            "refresh_token": refresh_token,
-        },
-        auth=(client_id, client_secret),
-        timeout=30,
-    )
-
-    if not response.ok:
-        raise RuntimeError(
-            f"Spotify authentication failed "
-            f"({response.status_code}): {response.text}"
-        )
-
-    data = response.json()
-
-    access_token = data.get("access_token")
-
-    if not access_token:
-        raise RuntimeError(
-            "Spotify authentication succeeded but "
-            "no access token was returned."
-        )
-
-    return access_token
-
-
-# ============================================================
-# SPOTIFY API CLIENT
-# ============================================================
-
-class Spotify:
-    def __init__(self, access_token):
-        self.session = requests.Session()
-
-        self.session.headers.update({
-            "Authorization": f"Bearer {access_token}",
-            "Content-Type": "application/json",
-        })
-
-    def request(self, method, endpoint, **kwargs):
-        url = f"{SPOTIFY_API_URL}{endpoint}"
-
-        response = self.session.request(
-            method,
-            url,
-            timeout=30,
-            **kwargs,
-        )
-
-        # Handle Spotify rate limiting.
-        if response.status_code == 429:
-            retry_after = int(
-                response.headers.get("Retry-After", "5")
-            )
-
-            print(
-                f"Spotify rate limit reached. "
-                f"Waiting {retry_after} seconds..."
-            )
-
-            time.sleep(retry_after)
-
-            response = self.session.request(
-                method,
-                url,
-                timeout=30,
-                **kwargs,
-            )
-
-        if not response.ok:
-            raise RuntimeError(
-                f"Spotify API request failed "
-                f"({response.status_code}): {response.text}"
-            )
-
-        if response.status_code == 204:
-            return None
-
-        return response.json()
-
-    def get_playlist(self, playlist_id):
-        return self.request(
-            "GET",
-            f"/playlists/{playlist_id}",
-            params={
-                "fields": (
-                    "name,"
-                    "owner(display_name),"
-                    "snapshot_id,"
-                    "items.total"
-                )
-            },
-        )
-
-    def get_playlist_items(self, playlist_id):
-        """
-        Fetch every item in the playlist.
-
-        Spotify returns playlist items in pages, so this keeps
-        requesting pages until the entire playlist is loaded.
-        """
-
-        all_items = []
-        offset = 0
-
-        while True:
-            data = self.request(
-                "GET",
-                f"/playlists/{playlist_id}/items",
-                params={
-                    "limit": 100,
-                    "offset": offset,
-                    "fields": (
-                        "items("
-                        "added_at,"
-                        "added_by,"
-                        "track"
-                        "),"
-                        "next,"
-                        "total,"
-                        "snapshot_id"
-                    ),
-                },
-            )
-
-            items = data.get("items", [])
-
-            all_items.extend(items)
-
-            total = data.get("total", "?")
-
-            print(
-                f"Fetched {len(all_items)}/{total} items..."
-            )
-
-            if not data.get("next"):
-                break
-
-            offset += len(items)
-
-        return all_items
-
-    def reorder_item(
-        self,
-        playlist_id,
-        range_start,
-        insert_before,
-        snapshot_id=None,
-    ):
-        """
-        Move one playlist item to another position.
-        """
-
-        payload = {
-            "range_start": range_start,
-            "insert_before": insert_before,
-            "range_length": 1,
-        }
-
-        if snapshot_id:
-            payload["snapshot_id"] = snapshot_id
-
-        return self.request(
-            "PUT",
-            f"/playlists/{playlist_id}/items",
-            json=payload,
-        )
-
-
-# ============================================================
-# PLAYLIST HELPERS
-# ============================================================
-
-def parse_added_at(value):
+def parse_added_at(value: str | None) -> datetime | None:
     if not value:
         return None
 
     try:
-        return datetime.fromisoformat(
-            value.replace("Z", "+00:00")
-        )
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError:
         return None
 
 
-def sort_newest_first(items):
-    """
-    Sort newest additions first.
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Reorder a playlist so the newest additions come first."
+    )
+    parser.add_argument(
+        "--destination-playlist-id",
+        required=True,
+        help="Spotify ID of the playlist to reorder.",
+    )
+    parser.add_argument(
+        "--log",
+        default=None,
+        help="Optional log file path inside the repository.",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Report what would change without touching Spotify.",
+    )
+    return parser.parse_args(argv)
 
-    Spotify's added_at timestamp represents when the playlist
-    item was added to the playlist.
 
-    Items without a timestamp are placed at the bottom.
-    """
+def read_playlist(spotify: Spotify, playlist_id: str) -> list[dict]:
+    """Return every playlist entry with its position, timestamp and track."""
+    entries = spotify.playlist_items(playlist_id, label="playlist")
+    items: list[dict] = []
 
-    def sort_key(item):
-        timestamp = parse_added_at(
-            item.get("added_at")
+    for position, entry in enumerate(entries):
+        raw = playlist_entry_track(entry)
+        track = track_from_spotify(raw)
+
+        items.append(
+            {
+                "position": position,
+                # Unique and stable for the reorder planner.
+                "token": track.id if track else f"{UNMANAGED_PREFIX}{position}",
+                "added_at": parse_added_at(entry.get("added_at")),
+                "track": track,
+                "uri": (raw or {}).get("uri")
+                or (f"spotify:track:{track.id}" if track else None),
+            }
         )
 
-        if timestamp is None:
-            return datetime.min.replace(
-                tzinfo=timezone.utc
-            )
+    return items
 
-        return timestamp
 
+def newest_first(items: list[dict]) -> list[dict]:
+    """Sort by added_at, newest first. Python's stable sort keeps ties in place."""
     return sorted(
         items,
-        key=sort_key,
+        key=lambda item: item["added_at"] or EPOCH,
         reverse=True,
     )
 
 
-def get_track_name(item):
-    track = item.get("track")
-
-    if not track:
-        return "Unknown track"
-
-    return track.get("name") or "Unknown track"
-
-
-def get_artist_names(item):
-    track = item.get("track")
-
-    if not track:
-        return ""
-
-    artists = track.get("artists") or []
-
-    return ", ".join(
-        artist.get("name", "Unknown artist")
-        for artist in artists
-    )
-
-
-# ============================================================
-# REORDER
-# ============================================================
-
-def reorder_playlist(
-    spotify,
-    playlist_id,
-    items,
-    logger,
-):
-    """
-    Reorder the playlist in place.
-
-    Duplicate tracks are supported because playlist entries are
-    tracked as individual objects rather than by track URI.
-    """
-
-    desired_order = sort_newest_first(items)
-
-    # Local representation of the current Spotify order.
-    working_order = list(items)
-
-    changes = 0
-
-    for desired_position, desired_item in enumerate(
-        desired_order
-    ):
-        current_position = None
-
-        # Find the exact playlist entry.
-        for index, current_item in enumerate(
-            working_order
-        ):
-            if current_item is desired_item:
-                current_position = index
-                break
-
-        if current_position is None:
-            raise RuntimeError(
-                "Could not find playlist item while reordering."
-            )
-
-        # Already in the correct position.
-        if current_position == desired_position:
-            continue
-
-        name = get_track_name(desired_item)
-        artists = get_artist_names(desired_item)
-        added_at = desired_item.get("added_at")
-
-        logger.write(
-            f"Move {current_position + 1:>4} -> "
-            f"{desired_position + 1:>4} | "
-            f"{name} - {artists} | "
-            f"added_at={added_at}"
-        )
-
-        spotify.reorder_item(
-            playlist_id=playlist_id,
-            range_start=current_position,
-            insert_before=desired_position,
-        )
-
-        # Keep our local order synchronized with Spotify.
-        moved_item = working_order.pop(
-            current_position
-        )
-
-        working_order.insert(
-            desired_position,
-            moved_item,
-        )
-
-        changes += 1
-
-    return changes
-
-
-# ============================================================
-# MAIN
-# ============================================================
-
-def main():
-    parser = argparse.ArgumentParser(
-        description=(
-            "Reorder a Spotify playlist so the newest "
-            "additions are at the top."
-        )
-    )
-
-    parser.add_argument(
-        "--destination-playlist-id",
-        required=True,
-        help="Spotify playlist ID to reorder.",
-    )
-
-    parser.add_argument(
-        "--log",
-        default=None,
-        help="Optional log file path.",
-    )
-
-    args = parser.parse_args()
-
+def main(argv: list[str] | None = None) -> int:
+    args = parse_args(argv)
     logger = Logger(args.log)
+    started = time.perf_counter()
 
     logger.write("=" * 70)
     logger.write("Spotify Playlist Reorder")
-    logger.write("Newest Added -> Oldest Added")
-    logger.write(
-        f"Started: {datetime.now(timezone.utc).isoformat()}"
-    )
+    logger.write("Newest added -> oldest added, duplicates removed")
+    logger.write(f"Started: {datetime.now(timezone.utc).isoformat()}")
     logger.write("=" * 70)
 
+    if args.dry_run:
+        logger.write("Dry run: no Spotify changes will be made.")
+
     try:
-        # --------------------------------------------------------
-        # Authenticate
-        # --------------------------------------------------------
+        logger.write("\nAuthenticating with Spotify...")
+        spotify = Spotify(get_access_token())
 
-        logger.write("Authenticating with Spotify...")
-
-        access_token = get_access_token()
-
-        spotify = Spotify(access_token)
+        playlist = spotify.playlist(args.destination_playlist_id)
+        owner = (playlist.get("owner") or {}).get("display_name") or "Unknown"
 
         logger.write("Authentication successful.")
         logger.write("")
+        logger.write(f"Playlist: {playlist.get('name', 'Unknown playlist')}")
+        logger.write(f"Owner: {owner}")
+        logger.write(f"Playlist ID: {args.destination_playlist_id}")
 
-        # --------------------------------------------------------
-        # Get playlist metadata
-        # --------------------------------------------------------
-
-        playlist_id = args.destination_playlist_id
-
-        playlist = spotify.get_playlist(
-            playlist_id
-        )
-
-        playlist_name = playlist.get(
-            "name",
-            "Unknown playlist",
-        )
-
-        owner = (
-            playlist.get("owner", {})
-            .get("display_name")
-            or "Unknown"
-        )
-
-        logger.write(
-            f"Playlist: {playlist_name}"
-        )
-
-        logger.write(
-            f"Owner: {owner}"
-        )
-
-        logger.write(
-            f"Playlist ID: {playlist_id}"
-        )
-
-        logger.write("")
-
-        # --------------------------------------------------------
-        # Fetch playlist
-        # --------------------------------------------------------
-
-        logger.write(
-            "Fetching playlist items..."
-        )
-
-        items = spotify.get_playlist_items(
-            playlist_id
-        )
-
-        logger.write("")
+        logger.write("\nReading playlist items...")
+        items = read_playlist(spotify, args.destination_playlist_id)
 
         if not items:
-            logger.write(
-                "Playlist is empty. Nothing to reorder."
-            )
-
+            logger.write("Playlist is empty. Nothing to do.")
             return 0
 
-        logger.write(
-            f"Found {len(items)} playlist items."
-        )
+        logger.write(f"Found {len(items)} playlist item(s).\n")
 
-        # --------------------------------------------------------
-        # Determine whether reorder is necessary
-        # --------------------------------------------------------
+        duplicates = find_duplicates([item["track"] for item in items])
 
-        desired_order = sort_newest_first(items)
+        if duplicates:
+            logger.write(f"Removing {len(duplicates)} duplicate(s)...")
 
-        already_sorted = all(
-            current is desired
-            for current, desired
-            in zip(items, desired_order)
-        )
+            for duplicate in duplicates[:20]:
+                logger.write(
+                    f"  [{duplicate.reason}] {duplicate.track.describe()} "
+                    f"(position {duplicate.position + 1})"
+                )
 
-        if already_sorted:
-            logger.write("")
-            logger.write(
-                "Playlist is already sorted "
-                "newest -> oldest."
-            )
-            logger.write(
-                "No Spotify changes were necessary."
-            )
+            if len(duplicates) > 20:
+                logger.write(f"  ...and {len(duplicates) - 20} more.")
+        else:
+            logger.write("No duplicates found.")
 
-            return 0
+        duplicate_positions = [duplicate.position for duplicate in duplicates]
+        snapshot_id = spotify.snapshot_id(args.destination_playlist_id)
 
-        # --------------------------------------------------------
-        # Show desired order
-        # --------------------------------------------------------
-
-        logger.write("")
-        logger.write(
-            "Desired order (first 10):"
-        )
-        logger.write("-" * 70)
-
-        for position, item in enumerate(
-            desired_order[:10],
-            start=1,
-        ):
-            logger.write(
-                f"{position:>3}. "
-                f"{get_track_name(item)}"
-                f" - "
-                f"{get_artist_names(item)}"
-            )
-
-            logger.write(
-                f"     added_at="
-                f"{item.get('added_at')}"
-            )
-
-        if len(desired_order) > 10:
-            logger.write(
-                f"... and "
-                f"{len(desired_order) - 10} more"
-            )
-
-        logger.write("-" * 70)
-        logger.write("")
-
-        # --------------------------------------------------------
-        # Reorder
-        # --------------------------------------------------------
-
-        logger.write(
-            "Reordering playlist..."
-        )
-
-        changes = reorder_playlist(
-            spotify=spotify,
-            playlist_id=playlist_id,
-            items=items,
+        snapshot_id = remove_playlist_positions(
+            spotify,
+            args.destination_playlist_id,
+            {
+                item["position"]: item["uri"]
+                for item in items
+                if item["uri"] is not None
+            },
+            duplicate_positions,
+            snapshot_id=snapshot_id,
             logger=logger,
+            dry_run=args.dry_run,
         )
 
-        # --------------------------------------------------------
-        # Finish
-        # --------------------------------------------------------
+        removed = set(duplicate_positions)
+        kept_items = [item for item in items if item["position"] not in removed]
+
+        if args.dry_run:
+            remaining = kept_items
+        else:
+            # Read back what Spotify actually did, because removing a URI may
+            # remove every copy of it instead of just the duplicate.
+            remaining = read_playlist(spotify, args.destination_playlist_id)
+            present = {item["track"].id for item in remaining if item["track"]}
+            lost = [
+                item
+                for item in kept_items
+                if item["track"] and item["track"].id not in present
+            ]
+
+            if lost:
+                logger.write(
+                    f"Restoring {len(lost)} track(s) Spotify removed entirely."
+                )
+
+                for start in range(0, len(lost), BATCH_SIZE):
+                    batch = lost[start : start + BATCH_SIZE]
+                    snapshot_id = spotify.add_items(
+                        args.destination_playlist_id,
+                        [f"spotify:track:{item['track'].id}" for item in batch],
+                        snapshot_id=snapshot_id,
+                    )
+
+                remaining = remaining + lost
+
+            counts = Counter(item["token"] for item in remaining)
+            repeated = [
+                token
+                for token, count in counts.items()
+                if count > 1 and not token.startswith(UNMANAGED_PREFIX)
+            ]
+
+            if repeated:
+                raise RuntimeError(
+                    f"Spotify still contains {len(repeated)} duplicated entr(ies) "
+                    "after the removal pass; aborting before reordering."
+                )
+
+        desired = newest_first(remaining)
 
         logger.write("")
-        logger.write("=" * 70)
-        logger.write(
-            f"Finished successfully. "
-            f"{changes} item(s) moved."
+        logger.write("Desired order (first 10):")
+        logger.write("-" * 70)
+
+        for position, item in enumerate(desired[:10], start=1):
+            track = item["track"]
+            name = track.describe() if track else "Unmanageable item"
+            logger.write(f"{position:>3}. {name}")
+            logger.write(f"     added_at={item['added_at'].isoformat() if item['added_at'] else 'unknown'}")
+
+        if len(desired) > 10:
+            logger.write(f"... and {len(desired) - 10} more")
+
+        logger.write("-" * 70)
+
+        moves = plan_moves(
+            [item["token"] for item in remaining],
+            [item["token"] for item in desired],
         )
-        logger.write(
-            "Playlist is now newest added -> oldest added."
+
+        snapshot_id, reorder_seconds = apply_moves(
+            spotify,
+            args.destination_playlist_id,
+            moves,
+            snapshot_id=snapshot_id,
+            logger=logger,
+            dry_run=args.dry_run,
         )
+
+        if not args.dry_run:
+            verify_order(
+                spotify,
+                args.destination_playlist_id,
+                desired,
+                logger,
+            )
+
+        logger.write("\n" + "=" * 70)
+        logger.write(f"Duplicates removed: {len(duplicates)}")
+        logger.write(f"Reorder operations: {len(moves)}")
+        logger.write(f"Reorder duration: {reorder_seconds:.2f} seconds")
         logger.write(
-            f"Finished: "
-            f"{datetime.now(timezone.utc).isoformat()}"
+            f"Finished: {datetime.now(timezone.utc).isoformat()} "
+            f"({time.perf_counter() - started:.1f}s total)"
         )
+
+        if args.dry_run:
+            logger.write("Dry run completed; nothing was changed on Spotify.")
+
         logger.write("=" * 70)
 
         return 0
 
-    except Exception as error:
-        logger.write("")
-        logger.write("=" * 70)
+    except Exception as error:  # noqa: BLE001 - surface any failure in the log
+        logger.write("\n" + "=" * 70)
         logger.write("REORDER FAILED")
         logger.write("=" * 70)
         logger.write(str(error))
-
         return 1
+
+    finally:
+        logger.save()
+
+
+def verify_order(
+    spotify: Spotify,
+    playlist_id: str,
+    desired: list[dict],
+    logger: Logger,
+) -> None:
+    """Re-read the playlist and confirm the managed tracks are in order."""
+    logger.write("\nVerifying the playlist...")
+    entries = spotify.playlist_items(playlist_id, label="playlist")
+
+    final_ids = [
+        track.id
+        for track in (track_from_spotify(playlist_entry_track(entry)) for entry in entries)
+        if track
+    ]
+    expected_ids = [item["track"].id for item in desired if item["track"]]
+
+    if final_ids != expected_ids:
+        shared = min(len(final_ids), len(expected_ids))
+        mismatch = next(
+            (
+                index
+                for index in range(shared)
+                if final_ids[index] != expected_ids[index]
+            ),
+            shared,
+        )
+        actual = final_ids[mismatch] if mismatch < len(final_ids) else "<missing>"
+        expected = (
+            expected_ids[mismatch] if mismatch < len(expected_ids) else "<none>"
+        )
+
+        raise RuntimeError(
+            "Verification failed: the playlist order does not match "
+            f"(first mismatch at position {mismatch + 1}; "
+            f"expected {expected}, found {actual})."
+        )
+
+    if len(entries) != len(desired):
+        raise RuntimeError(
+            "Verification failed: unexpected item count "
+            f"({len(entries)} in the playlist vs {len(desired)} expected)."
+        )
+
+    logger.write(f"Verification passed: {len(expected_ids)} tracks in order.")
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(main())

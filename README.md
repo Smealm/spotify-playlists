@@ -1,344 +1,204 @@
 # Spotify Playlist Full Archive
 
-Automatically reconstruct and maintain a **complete historical archive of a Spotify playlist** using data from [Spotify Playlist Archive](https://spotifyplaylistarchive.com/) and the Spotify Web API.
+Maintain a **permanent, always-updating archive of a Spotify playlist** using
+[Spotify Playlist Archive](https://spotifyplaylistarchive.com/) and the Spotify
+Web API.
 
-The goal is simple:
-
-> **Take a playlist's entire recorded history and turn it into a permanent, always-updating Spotify playlist.**
-
-Spotify Playlist Archive already keeps track of songs that have been added to and removed from playlists. This project takes that historical data, parses it, and mirrors the complete history back into Spotify.
-
----
-
-# ⚠️ Heads Up: Archive Song Count Disparity
-
-A cumulative archive may contain **more songs** than are currently present in the actual Spotify playlist. This is expected.
-
-The cumulative archive counts **every occurrence** of a song, including when it is removed and later re-added. The actual Spotify playlist only contains **one copy of each song**.
-
-The final archive may also contain fewer tracks if some songs are no longer available on Spotify or in your region.
-
----
-
-# Full Archives
-
-## Electronic
-
-### [Creamy](https://open.spotify.com/playlist/0d9fkV0DPxsq5Ag7IP8obL)
-<sub>
-Spotify’s “Creamy” playlist, preserved with every song it has featured since 2021, plus every song it adds in the future.<br>
-Powered by spotifyplaylistarchive.com and my own custom automation script.
-</sub>
-
-### [Dubstep Don](https://open.spotify.com/playlist/6jFdULRcOzcsNJoHLU136C)
-<sub>
-Spotify’s “Dubstep Don” playlist, preserved with every song it has featured since 2021, plus every song it adds in the future.<br>
-Powered by spotifyplaylistarchive.com and my own custom automation script.
-</sub>
-
----
-
-# Inspiration / Motivation
-
-This project is about creating **more complete Spotify playlists**.
-
-Each playlist in this repo contains the **full official Spotify playlist history** of whatever playlists are being archived, rather than being limited to the songs currently in rotation.
-
-It started with me wanting a **full Creamy playlist discography** to shuffle through instead of being limited to the current 100-song curation. I wanted the historical curation.
-
-
----
-
-# How It Works
-
-Using **Creamy** as an example, the process works in a few stages.
+The archive playlist is built in two layers:
 
 ```text
-Spotify Playlist Archive
-          │
-          ▼
-   Cumulative Archive
-          │
-          ▼
-    Parse Track URLs
-    + Added Dates
-          │
-          ▼
-   Fetch Spotify Metadata
-          │
-          ▼
-     Duplicate Check
-          │
-          ▼
-     Add Missing Songs
-          │
-          ▼
-     Reorder Playlist
-          │
-          ▼
- Permanent Full Archive
+┌──────────────────────────────────────────┐
+│ 1. The source playlist's current order   │  exactly how it is on Spotify today
+├──────────────────────────────────────────┤
+│ 2. Every track from the recorded history │  newest addition first
+└──────────────────────────────────────────┘
 ```
 
-## 1. Get the complete playlist history
-
-The first step is retrieving the **Cumulative** archive for the playlist from [Spotify Playlist Archive](https://github.com/mackorone/spotify-playlist-archive-2).
-
-For Creamy, the source is:
-
-https://github.com/mackorone/spotify-playlist-archive-2/blob/main/playlists/cumulative/37i9dQZF1DXdgz8ZB7c2CP.md
-
-The cumulative archive contains every track that has been recorded as appearing in the playlist, including tracks that have since been removed.
-
-This is important because the current Spotify playlist only tells us what is there **right now**. The cumulative archive lets us reconstruct what has been there **historically**.
+So the archive always opens the way the real playlist looks right now, and the
+rest of the history sits underneath it, ready to shuffle.
 
 ---
 
-## 2. Parse the archive
+# Managed playlists
 
-The archive is a Markdown file containing information about each track.
+## Full archives
 
-The script parses the raw Markdown and extracts:
+| Playlist | Destination | Source |
+|---|---|---|
+| [Creamy](https://open.spotify.com/playlist/0d9fkV0DPxsq5Ag7IP8obL) | `0d9fkV0DPxsq5Ag7IP8obL` | `37i9dQZF1DXdgz8ZB7c2CP` |
+| [Dubstep Don](https://open.spotify.com/playlist/6jFdULRcOzcsNJoHLU136C) | `6jFdULRcOzcsNJoHLU136C` | `37i9dQZF1DX5Q27plkaOQ3` |
+| [Brain Food](https://open.spotify.com/playlist/5Hcbss2XBcioA7GEGM0yOf) | `5Hcbss2XBcioA7GEGM0yOf` | `37i9dQZF1DWXLeA8Omikj7` |
 
-* Spotify track URLs
-* Spotify track IDs
-* The date each track was added
+## Reordered playlists
 
-Everything else is ignored.
+| Playlist | Playlist ID |
+|---|---|
+| What Is This | `5sahCBpr8p5Bzte0QgB4gh` |
+| What Is This+ | `1PNK5SF5TClIEUJ5ZrTa6Q` |
 
-The result is essentially a chronological list:
-
-```text
-Track A → 2024-01-03
-Track B → 2024-01-08
-Track C → 2024-01-15
-Track D → 2024-02-01
-...
-```
-
-The tracks are then sorted by their original **Added** date.
+These are sorted by the date each track was added, newest first.
 
 ---
 
-## 3. Fetch Spotify metadata
+# Schedule
 
-The Spotify track URLs are used to retrieve metadata through the **Spotify Web API**.
+Every managed playlist is updated **daily at 2 PM Eastern**.
 
-Metadata is used for more than simply adding songs.
-
-It also allows the script to identify duplicate songs that may have different Spotify track IDs.
-
-This matters because the cumulative archive can contain situations like:
+GitHub Actions cron runs in UTC and cannot follow daylight saving, so each
+workflow schedules two times:
 
 ```text
-Song added
-    ↓
-Song removed
-    ↓
-Same song added again
+18:00 UTC  →  2 PM EDT (daylight saving)
+19:00 UTC  →  2 PM EST (standard time)
 ```
 
-The archive records both appearances, meaning the same song can occur multiple times in the historical data.
+A single gate step in the shared workflow checks the actual hour in
+`America/New_York` and skips the run that is not 2 PM, so only one sync happens
+per day, all year.
 
-Without duplicate detection, those entries would become duplicate songs in the permanent archive.
+Things to know:
+
+* Scheduled GitHub workflows can start a few minutes late when the platform is
+  busy. The scripts are idempotent, so a late or repeated run is harmless.
+* Use **Run workflow** in the Actions tab to sync immediately; manual runs skip
+  the time check.
+* Each run overwrites its log in `logs/` and commits it back to the repository.
 
 ---
 
-# Duplicate Detection
-
-Before anything is added to the destination playlist, the script checks whether the song is already represented there.
-
-Duplicate detection uses a combination of:
-
-### Exact Spotify ID
-
-If the exact Spotify track already exists in the destination playlist, it is skipped immediately.
+# How it works
 
 ```text
-spotify:track:ABC123
-        ↓
-Already exists
-        ↓
-SKIP
+Spotify Playlist Archive        Live Spotify playlist
+      cumulative                       current order
+          │                                 │
+          ▼                                 ▼
+   Parse markdown                    Read items
+   (id, title, artist,               (id, name, artist,
+    duration, added)                  duration, order)
+          │                                 │
+          └──────────────┬──────────────────┘
+                         ▼
+              Remove duplicates
+              (spotify-dedup rule)
+                         ▼
+                 Exact target order
+                         ▼
+       Remove extras → add missing → reorder
+                         ▼
+       Verify the playlist matches the target
 ```
 
-### Metadata-based matching
-
-Spotify can have multiple track IDs representing the same song across different releases, remasters, albums, or regional versions.
-
-Because of this, the script also performs **Dedup-style fuzzy matching** using track metadata.
-
-The matching process considers:
-
-* Track title
-* Artist(s)
-* Track duration
-
-For example:
-
-```text
-Track A
-"Example Song"
-Artist: Example Artist
-Duration: 3:42
-
-Track B
-"Example Song - Remastered"
-Artist: Example Artist
-Duration: 3:43
-```
-
-Even though these may have different Spotify IDs, they can be recognized as the same underlying song.
-
-The matching thresholds can be configured in the script.
+1. **History** comes from the cumulative markdown file, where each track keeps
+   its earliest recorded addition date. When the same Spotify ID was added,
+   removed and added again, the newest occurrence wins.
+2. **Current order** comes from the live source playlist. If Spotify cannot
+   serve it, the archive's `pretty` snapshot is used instead, so the job still
+   runs.
+3. **Duplicates** are dropped while the target is built, and then the
+   destination playlist is reconciled to that target exactly. Any track in the
+   archive playlist that is not part of the target is removed.
+4. **Changes are minimal.** Tracks that are already correct stay where they
+   are; the rest are moved in blocks of up to 100 items, which is Spotify's
+   per-request limit.
+5. **Verification** re-reads the playlist and compares it to the target. A
+   mismatch fails the job instead of leaving a half-tidied playlist.
 
 ---
 
-# Adding Songs
+# Duplicate detection
 
-Once duplicate detection is complete, the script has a list containing only songs that genuinely need to be added.
+The rule is the one used by
+[JMPerez/spotify-dedup](https://github.com/JMPerez/spotify-dedup):
 
-Those songs are added to Spotify using the Spotify Web API.
+| Reason | Condition |
+|---|---|
+| `same-id` | The exact Spotify track ID was already kept. |
+| `same-name-artist` | The name and **primary** artist match (case-insensitive) and the durations are within **2 seconds**. |
 
-Spotify allows multiple tracks to be added in a single request, so the script batches additions rather than making one API request per song.
+The first occurrence is always the one that is kept. Extra artists are ignored
+for the comparison, which is what catches the common case of the same song
+appearing under two releases:
 
-New tracks are initially appended to the playlist.
+```text
+"Song"                    "Song"
+Artist A, Artist B        Artist A
+3:42                      3:42
 
-They are not placed in their final position yet.
+same-name-artist  →  one copy kept
+```
 
-That happens in the next step.
+It is deliberately conservative about the parts that usually mean a different
+recording:
+
+* A different primary artist is never a duplicate.
+* A duration difference of 2 seconds or more is never a duplicate, so distinct
+  edits and extended mixes survive.
+* Titles are compared as-is (apart from case and surrounding whitespace), so
+  `Song` and `Song - Remastered` are only merged when the duration also matches
+  within 2 seconds.
+
+A song that is unavailable in your region can be in the history but not
+addable. Those tracks are skipped by Spotify and do not fail the sync.
 
 ---
 
-# Why This Exists
+# Scripts
 
-Spotify playlists are inherently temporary.
+Both scripts need `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET` and
+`SPOTIFY_REFRESH_TOKEN`, and both accept `--dry-run` to report what would
+change without touching Spotify.
 
-A playlist can change every day:
+## `archive-playlists.py`
 
-```text
-Today
-├── Song A
-├── Song B
-└── Song C
-
-Tomorrow
-├── Song B
-├── Song C
-└── Song D
+```bash
+python archive-playlists.py \
+  --archive-playlist-id 37i9dQZF1DXdgz8ZB7c2CP \
+  --destination-playlist-id 0d9fkV0DPxsq5Ag7IP8obL \
+  --log logs/creamy-output.txt
 ```
 
-Once Song A is removed, Spotify's current playlist no longer provides an easy way to see that Song A was ever there.
+`--archive-playlist-id` is the Spotify ID of the playlist being archived; it is
+also the ID used to find the markdown history. `--destination-playlist-id` is
+the archive playlist that gets maintained.
 
-Spotify Playlist Archive solves the historical-data problem by recording playlist changes over time.
+## `reorder-playlists.py`
 
-This project takes the next step:
-
-> **Turn that historical record into a permanent Spotify playlist.**
-
-Instead of manually saving songs as they appear, the archive can be reconstructed automatically.
-
----
-
-# Relationship to Spotify Playlist Archive
-
-This project **does not maintain its own playlist change history**.
-
-That responsibility belongs to the project it relies on:
-
-[Spotify Playlist Archive](https://spotifyplaylistarchive.com/)
-
-If you want to see the historical record for a specific archived playlist — including when tracks were added and removed — use:
-
-https://spotifyplaylistarchive.com/
-
-This repository simply consumes that existing historical data, parses it, and uses it to maintain a permanent Spotify playlist.
-
-In other words:
-
-```text
-Spotify Playlist Archive
-        │
-        │  Historical data
-        ▼
-This project
-        │
-        │  Parse + deduplicate
-        │  + synchronize
-        ▼
-Permanent Spotify Playlist
+```bash
+python reorder-playlists.py \
+  --destination-playlist-id 5sahCBpr8p5Bzte0QgB4gh \
+  --log logs/what-is-this-output.txt
 ```
 
-The upstream project remains the **source of truth for playlist history**.
+Removes duplicates, then sorts by `added_at`, newest first.
 
-This project is essentially a **mirror and reconstruction layer**.
+## Shared code
+
+`spotify_utils.py` holds the pieces both scripts use: credentials, a Web API
+client with rate-limit and 5xx retries, the duplicate tracker, the log writer
+and the reorder planner. Behaviour only needs to be changed in one place.
 
 ---
 
 # Limitations
 
-### Upstream data is required
-
-If Spotify Playlist Archive does not have a historical record for a playlist, this project cannot reconstruct its history.
-
-### Spotify track availability
-
-A historical Spotify track may no longer be available.
-
-Tracks can become unavailable because of:
-
-* Licensing changes
-* Regional availability
-* Removed releases
-* Deleted Spotify tracks
-* Label/catalog changes
-
-Those tracks may not be addable even though they exist in the historical archive.
-
-### Fuzzy matching is not perfect
-
-Metadata-based duplicate detection is intentionally conservative.
-
-There is no universal way to determine whether two Spotify tracks are "the same song" in every situation.
-
-Remixes, live versions, edits, remasters, covers, and alternate recordings can make this ambiguous.
-
-The matching thresholds can therefore be adjusted depending on how aggressive the archive should be.
+* **Upstream data is required.** If Spotify Playlist Archive has no record of a
+  playlist, there is no history to rebuild.
+* **Track availability.** Removed, region-locked or deleted tracks cannot be
+  added even though the history still lists them.
+* **Spotify ID changes.** Tracks that are re-released under a new ID can only be
+  merged when name, primary artist and duration still line up.
+* **Playlist size.** Spotify itself caps playlists at 10,000 items; the archive
+  is limited by the same ceiling.
 
 ---
 
-# Project Philosophy
+# Credits
 
-The project is intentionally simple:
-
-**Don't lose the music.**
-
-If a playlist is continuously updated, its history should not have to disappear every time a song is removed.
-
-The upstream archive records the history.
-
-This project turns that history into something you can actually keep listening to.
-
----
-
-## Credits
-
-Historical playlist data is provided by:
-
-**[Spotify Playlist Archive](https://spotifyplaylistarchive.com/)**
-
-Archive repository:
-
-**[mackorone/spotify-playlist-archive-2](https://github.com/mackorone/spotify-playlist-archive-2)**
-
-Duplicate-matching inspiration:
-
-**[JMPerez/spotify-dedup](https://github.com/JMPerez/spotify-dedup)**
-
-Spotify integration:
-
-**Spotify Web API**
-
----
+* Historical playlist data: [Spotify Playlist Archive](https://spotifyplaylistarchive.com/)
+  ([mackorone/spotify-playlist-archive-2](https://github.com/mackorone/spotify-playlist-archive-2))
+* Duplicate-matching rule: [JMPerez/spotify-dedup](https://github.com/JMPerez/spotify-dedup)
+* Playlist API: [Spotify Web API](https://developer.spotify.com/documentation/web-api)
 
 # License
 
