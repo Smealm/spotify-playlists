@@ -2,11 +2,11 @@
 Spotify Playlist Archive Sync
 Current playlist order on top, full history below
 Duplicates: same Spotify ID, or same name/artist/duration
-Started: 2026-11-10T16:58:46.608834+00:00
+Started: 2026-11-14T21:46:04.764107+00:00
 ======================================================================
 
 Reading the archived history...
-History tracks: 1570 unique Spotify IDs
+History tracks: 1577 unique Spotify IDs
 
 Authenticating with Spotify...
 
@@ -14,23 +14,51 @@ Reading the source playlist's current order...
 Live source playlist unavailable: GET https://api.spotify.com/v1/playlists/37i9dQZF1DXdgz8ZB7c2CP/items failed (404): {"error": {"status": 404, "message": "Resource not found" } }
 Falling back to the archive's pretty snapshot.
 Current order tracks: 100
-Target archive: 1525 unique tracks
+Target archive: 1532 unique tracks
 Duplicates dropped: 145 (same id: 100, same name/artist/duration: 45)
 
 Reading the archive playlist...
 Archive playlist before: 1525 item(s)
-No tracks are missing from the archive playlist.
-Reorder plan: 0 operation(s) for 1525 item(s).
-Playlist is already in the desired order.
+Adding 7 missing track(s)...
+  added 7/7
+Reorder plan: 27 operation(s) for 1532 item(s).
+Applying 27 reorder operation(s)...
+  move 1/27: 1 item(s) from 1525 to 0
+  move 2/27: 1 item(s) from 4 to 1
+  move 3/27: 1 item(s) from 3 to 2
+  move 4/27: 1 item(s) from 1526 to 4
+  move 5/27: 1 item(s) from 8 to 5
+  move 6/27: 1 item(s) from 8 to 6
+  move 7/27: 2 item(s) from 1527 to 8
+  move 8/27: 3 item(s) from 11 to 10
+  move 9/27: 1 item(s) from 1529 to 13
+  move 10/27: 1 item(s) from 15 to 14
+  move 11/27: 1 item(s) from 1530 to 17
+  move 12/27: 1 item(s) from 1531 to 19
+  move 13/27: 11 item(s) from 45 to 44
+  move 14/27: 7 item(s) from 57 to 55
+  move 15/27: 2 item(s) from 65 to 62
+  move 16/27: 3 item(s) from 68 to 64
+  move 17/27: 9 item(s) from 72 to 67
+  move 18/27: 4 item(s) from 82 to 76
+  move 19/27: 20 item(s) from 87 to 80
+  move 20/27: 7 item(s) from 107 to 101
+  move 21/27: 1 item(s) from 109 to 108
+  move 22/27: 1 item(s) from 114 to 109
+  move 23/27: 9 item(s) from 115 to 111
+  move 24/27: 1 item(s) from 121 to 120
+  move 25/27: 1 item(s) from 124 to 121
+  move 26/27: 18 item(s) from 125 to 123
+  move 27/27: 99 item(s) from 143 to 142
 
 Verifying the archive playlist...
-Verification passed: 1525 tracks in order.
+Verification passed: 1532 tracks in order.
 
 ======================================================================
-Archive tracks: 1525
+Archive tracks: 1532
 Items removed: 0
-Tracks added: 0
-Reorder operations: 0
-Reorder duration: 0.00 seconds
-Finished: 2026-11-10T16:59:18.433037+00:00 (31.8s total)
+Tracks added: 7
+Reorder operations: 27
+Reorder duration: 5.73 seconds
+Finished: 2026-11-14T21:46:35.692091+00:00 (30.9s total)
 ======================================================================
