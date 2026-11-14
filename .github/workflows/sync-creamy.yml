@@ -4,10 +4,8 @@ on:
   workflow_dispatch:
 
   schedule:
-    # GitHub cron is UTC and cannot follow daylight saving, so both 2 PM
-    # offsets are scheduled and the shared workflow keeps the matching one.
-    # 18:00 UTC = 2 PM EDT (summer), 19:00 UTC = 2 PM EST (winter).
-    - cron: "0 18 * * *"
+    # 19:00 UTC = 2 PM EST. GitHub cron cannot follow daylight saving, so
+    # during EDT this fires at 3 PM local instead.
     - cron: "0 19 * * *"
 
 jobs:
