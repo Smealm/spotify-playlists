@@ -2,11 +2,11 @@
 Spotify Playlist Archive Sync
 Current playlist order on top, full history below
 Duplicates: same Spotify ID, or same name/artist/duration
-Started: 2026-11-14T22:49:09.905965+00:00
+Started: 2026-11-15T23:16:15.604221+00:00
 ======================================================================
 
 Reading the archived history...
-History tracks: 1249 unique Spotify IDs
+History tracks: 1251 unique Spotify IDs
 
 Authenticating with Spotify...
 
@@ -14,23 +14,93 @@ Reading the source playlist's current order...
 Live source playlist unavailable: GET https://api.spotify.com/v1/playlists/37i9dQZF1DWXLeA8Omikj7/items failed (404): {"error": {"status": 404, "message": "Resource not found" } }
 Falling back to the archive's pretty snapshot.
 Current order tracks: 200
-Target archive: 1166 unique tracks
+Target archive: 1168 unique tracks
 Duplicates dropped: 283 (same id: 200, same name/artist/duration: 83)
 
 Reading the archive playlist...
 Archive playlist before: 1166 item(s)
-No tracks are missing from the archive playlist.
-Reorder plan: 0 operation(s) for 1166 item(s).
-Playlist is already in the desired order.
+Adding 2 missing track(s)...
+  added 2/2
+Reorder plan: 69 operation(s) for 1168 item(s).
+Applying 69 reorder operation(s)...
+  move 1/69: 1 item(s) from 22 to 20
+  move 2/69: 1 item(s) from 22 to 21
+  move 3/69: 1 item(s) from 25 to 23
+  move 4/69: 1 item(s) from 25 to 24
+  move 5/69: 1 item(s) from 1166 to 26
+  move 6/69: 1 item(s) from 29 to 27
+  move 7/69: 1 item(s) from 29 to 28
+  move 8/69: 1 item(s) from 31 to 29
+  move 9/69: 3 item(s) from 31 to 30
+  move 10/69: 1 item(s) from 35 to 33
+  move 11/69: 19 item(s) from 35 to 34
+  move 12/69: 1 item(s) from 1167 to 53
+  move 13/69: 1 item(s) from 56 to 54
+  move 14/69: 3 item(s) from 56 to 55
+  move 15/69: 2 item(s) from 60 to 58
+  move 16/69: 1 item(s) from 61 to 60
+  move 17/69: 1 item(s) from 63 to 61
+  move 18/69: 2 item(s) from 63 to 62
+  move 19/69: 1 item(s) from 66 to 64
+  move 20/69: 4 item(s) from 66 to 65
+  move 21/69: 1 item(s) from 71 to 69
+  move 22/69: 2 item(s) from 71 to 70
+  move 23/69: 1 item(s) from 74 to 73
+  move 24/69: 1 item(s) from 76 to 74
+  move 25/69: 1 item(s) from 76 to 75
+  move 26/69: 1 item(s) from 81 to 80
+  move 27/69: 1 item(s) from 83 to 82
+  move 28/69: 1 item(s) from 86 to 84
+  move 29/69: 2 item(s) from 88 to 87
+  move 30/69: 1 item(s) from 94 to 93
+  move 31/69: 1 item(s) from 104 to 101
+  move 32/69: 1 item(s) from 104 to 103
+  move 33/69: 1 item(s) from 109 to 108
+  move 34/69: 1 item(s) from 114 to 113
+  move 35/69: 1 item(s) from 117 to 116
+  move 36/69: 1 item(s) from 131 to 129
+  move 37/69: 1 item(s) from 133 to 132
+  move 38/69: 1 item(s) from 143 to 142
+  move 39/69: 2 item(s) from 146 to 145
+  move 40/69: 1 item(s) from 149 to 148
+  move 41/69: 1 item(s) from 153 to 149
+  move 42/69: 1 item(s) from 151 to 150
+  move 43/69: 1 item(s) from 153 to 151
+  move 44/69: 2 item(s) from 153 to 152
+  move 45/69: 1 item(s) from 156 to 154
+  move 46/69: 2 item(s) from 159 to 158
+  move 47/69: 2 item(s) from 162 to 160
+  move 48/69: 1 item(s) from 163 to 162
+  move 49/69: 1 item(s) from 166 to 165
+  move 50/69: 1 item(s) from 171 to 170
+  move 51/69: 3 item(s) from 176 to 175
+  move 52/69: 1 item(s) from 187 to 178
+  move 53/69: 2 item(s) from 181 to 179
+  move 54/69: 2 item(s) from 182 to 181
+  move 55/69: 2 item(s) from 186 to 185
+  move 56/69: 1 item(s) from 190 to 187
+  move 57/69: 2 item(s) from 189 to 188
+  move 58/69: 1 item(s) from 193 to 191
+  move 59/69: 1 item(s) from 193 to 192
+  move 60/69: 1 item(s) from 197 to 195
+  move 61/69: 1 item(s) from 197 to 196
+  move 62/69: 100 item(s) from 202 to 200
+  move 63/69: 73 item(s) from 302 to 300
+  move 64/69: 100 item(s) from 375 to 374
+  move 65/69: 100 item(s) from 475 to 474
+  move 66/69: 100 item(s) from 575 to 574
+  move 67/69: 100 item(s) from 675 to 674
+  move 68/69: 100 item(s) from 775 to 774
+  move 69/69: 66 item(s) from 875 to 874
 
 Verifying the archive playlist...
-Verification passed: 1166 tracks in order.
+Verification passed: 1168 tracks in order.
 
 ======================================================================
-Archive tracks: 1166
+Archive tracks: 1168
 Items removed: 0
-Tracks added: 0
-Reorder operations: 0
-Reorder duration: 0.00 seconds
-Finished: 2026-11-14T22:49:27.913517+00:00 (18.0s total)
+Tracks added: 2
+Reorder operations: 69
+Reorder duration: 18.41 seconds
+Finished: 2026-11-15T23:16:56.163877+00:00 (40.6s total)
 ======================================================================
