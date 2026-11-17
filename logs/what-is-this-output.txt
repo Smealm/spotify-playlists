@@ -1,7 +1,7 @@
 ======================================================================
 Spotify Playlist Reorder
 Newest added -> oldest added, duplicates removed
-Started: 2026-11-15T23:19:01.543019+00:00
+Started: 2026-11-17T02:18:44.320296+00:00
 ======================================================================
 
 Authenticating with Spotify...
@@ -12,42 +12,43 @@ Owner: Smealm
 Playlist ID: 5sahCBpr8p5Bzte0QgB4gh
 
 Reading playlist items...
-Found 1450 playlist item(s).
+Found 1451 playlist item(s).
 
 No duplicates found.
 
 Desired order (first 10):
 ----------------------------------------------------------------------
-  1. Taste My Love - WHIPPED CREAM, L I F E / L I N E
+  1. Neon Soul - Levity
+     added_at=2026-11-17T01:37:20+00:00
+  2. Taste My Love - WHIPPED CREAM, L I F E / L I N E
      added_at=2026-11-14T21:54:04+00:00
-  2. Melting over You - Slushii
+  3. Melting over You - Slushii
      added_at=2026-10-22T00:53:02+00:00
-  3. in my dreams - AVELLO, Abi Flynn
+  4. in my dreams - AVELLO, Abi Flynn
      added_at=2026-10-18T15:11:00+00:00
-  4. Fall - Dillon Francis, Oaks
+  5. Fall - Dillon Francis, Oaks
      added_at=2026-10-11T19:31:26+00:00
-  5. Gloss (feat. y3kfae) - Daniel Allan, y3kfae
+  6. Gloss (feat. y3kfae) - Daniel Allan, y3kfae
      added_at=2026-10-11T17:28:49+00:00
-  6. Stealing Fire - Virtual Riot
+  7. Stealing Fire - Virtual Riot
      added_at=2026-10-08T20:06:51+00:00
-  7. move ting - Skrillex, Moody Good, Nakeesha
+  8. move ting - Skrillex, Moody Good, Nakeesha
      added_at=2026-10-08T20:03:31+00:00
-  8. RESCUE U - Alison Wonderland, WINK
+  9. RESCUE U - Alison Wonderland, WINK
      added_at=2026-10-08T20:03:02+00:00
-  9. ONE FOR YOU - ALLEYCVT, Levity
+ 10. ONE FOR YOU - ALLEYCVT, Levity
      added_at=2026-10-04T01:21:04+00:00
- 10. Forever - Marshmello, pluko
-     added_at=2026-09-05T22:15:01+00:00
-... and 1440 more
+... and 1441 more
 ----------------------------------------------------------------------
-Playlist is already in the desired order.
+Applying 1 reorder operation(s)...
+  move 1/1: 1 item(s) from 1450 to 0
 
 Verifying the playlist...
-Verification passed: 1450 tracks in order.
+Verification passed: 1451 tracks in order.
 
 ======================================================================
 Duplicates removed: 0
-Reorder operations: 0
-Reorder duration: 0.00 seconds
-Finished: 2026-11-15T23:19:26.458386+00:00 (24.9s total)
+Reorder operations: 1
+Reorder duration: 0.25 seconds
+Finished: 2026-11-17T02:19:10.340793+00:00 (26.0s total)
 ======================================================================
