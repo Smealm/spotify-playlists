@@ -1,7 +1,7 @@
 ======================================================================
 Spotify Playlist Reorder
 Newest added -> oldest added, duplicates removed
-Started: 2026-11-17T02:18:44.320296+00:00
+Started: 2026-11-18T01:29:05.304162+00:00
 ======================================================================
 
 Authenticating with Spotify...
@@ -40,15 +40,14 @@ Desired order (first 10):
      added_at=2026-10-04T01:21:04+00:00
 ... and 1441 more
 ----------------------------------------------------------------------
-Applying 1 reorder operation(s)...
-  move 1/1: 1 item(s) from 1450 to 0
+Playlist is already in the desired order.
 
 Verifying the playlist...
 Verification passed: 1451 tracks in order.
 
 ======================================================================
 Duplicates removed: 0
-Reorder operations: 1
-Reorder duration: 0.25 seconds
-Finished: 2026-11-17T02:19:10.340793+00:00 (26.0s total)
+Reorder operations: 0
+Reorder duration: 0.00 seconds
+Finished: 2026-11-18T01:29:27.742659+00:00 (22.4s total)
 ======================================================================
