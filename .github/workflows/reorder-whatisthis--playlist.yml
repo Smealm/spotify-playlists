@@ -1,0 +1,21 @@
+name: Reorder What Is This- Playlist
+
+on:
+  workflow_dispatch:
+
+  schedule:
+    # 19:00 UTC = 2 PM EST. GitHub cron cannot follow daylight saving, so
+    # during EDT this fires at 3 PM local instead.
+    - cron: "0 19 * * *"
+
+jobs:
+  sync:
+    permissions:
+      contents: write
+    uses: ./.github/workflows/_playlist-sync.yml
+    with:
+      label: What Is This-
+      script: reorder-playlists.py
+      destination_playlist_id: "1ABNnHJuhR18e5IE6LVC6o"
+      log_path: logs/whatisthis--output.txt
+    secrets: inherit
