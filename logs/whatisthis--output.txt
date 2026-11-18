@@ -1,0 +1,40 @@
+======================================================================
+Spotify Playlist Reorder
+Newest added -> oldest added, duplicates removed
+Started: 2026-11-18T20:32:49.221814+00:00
+======================================================================
+
+Authenticating with Spotify...
+Authentication successful.
+
+Playlist: what is this -
+Owner: Smealm
+Playlist ID: 1ABNnHJuhR18e5IE6LVC6o
+
+Reading playlist items...
+Found 3 playlist item(s).
+
+No duplicates found.
+
+Desired order (first 10):
+----------------------------------------------------------------------
+  1. Bass Cannon (Flux's Version) - Crankdat Remix - Flux Pavilion, Crankdat
+     added_at=2026-11-18T20:27:57+00:00
+  2. ONE FOR YOU - ALLEYCVT, Levity
+     added_at=2026-11-18T20:16:06+00:00
+  3. Rise Again - Slushii, Aviella
+     added_at=2026-11-18T20:13:20+00:00
+----------------------------------------------------------------------
+Applying 2 reorder operation(s)...
+  move 1/2: 1 item(s) from 2 to 0
+  move 2/2: 1 item(s) from 2 to 1
+
+Verifying the playlist...
+Verification passed: 3 tracks in order.
+
+======================================================================
+Duplicates removed: 0
+Reorder operations: 2
+Reorder duration: 0.64 seconds
+Finished: 2026-11-18T20:32:51.234004+00:00 (2.0s total)
+======================================================================
