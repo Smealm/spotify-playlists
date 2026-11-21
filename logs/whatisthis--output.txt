@@ -1,7 +1,7 @@
 ======================================================================
 Spotify Playlist Reorder
 Newest added -> oldest added, duplicates removed
-Started: 2026-11-20T00:58:24.173641+00:00
+Started: 2026-11-21T00:30:24.378775+00:00
 ======================================================================
 
 Authenticating with Spotify...
@@ -29,17 +29,14 @@ Desired order (first 10):
   5. Rise Again - Slushii, Aviella
      added_at=2026-11-18T20:13:20+00:00
 ----------------------------------------------------------------------
-Applying 3 reorder operation(s)...
-  move 1/3: 1 item(s) from 4 to 0
-  move 2/3: 1 item(s) from 4 to 1
-  move 3/3: 1 item(s) from 4 to 2
+Playlist is already in the desired order.
 
 Verifying the playlist...
 Verification passed: 5 tracks in order.
 
 ======================================================================
 Duplicates removed: 0
-Reorder operations: 3
-Reorder duration: 0.72 seconds
-Finished: 2026-11-20T00:58:26.349807+00:00 (2.2s total)
+Reorder operations: 0
+Reorder duration: 0.00 seconds
+Finished: 2026-11-21T00:30:25.647116+00:00 (1.3s total)
 ======================================================================
