@@ -2,7 +2,7 @@
 Spotify Playlist Archive Sync
 Current playlist order on top, full history below
 Duplicates: same Spotify ID, or same name/artist/duration
-Started: 2026-11-20T00:58:10.657218+00:00
+Started: 2026-11-21T00:30:17.556361+00:00
 ======================================================================
 
 Reading the archived history...
@@ -20,58 +20,56 @@ Duplicates dropped: 283 (same id: 200, same name/artist/duration: 83)
 Reading the archive playlist...
 Archive playlist before: 1168 item(s)
 No tracks are missing from the archive playlist.
-Reorder plan: 50 operation(s) for 1168 item(s).
-Applying 50 reorder operation(s)...
-  move 1/50: 1 item(s) from 18 to 16
-  move 2/50: 1 item(s) from 18 to 17
-  move 3/50: 1 item(s) from 23 to 22
-  move 4/50: 1 item(s) from 25 to 23
-  move 5/50: 1 item(s) from 25 to 24
-  move 6/50: 1 item(s) from 52 to 48
-  move 7/50: 3 item(s) from 50 to 49
-  move 8/50: 1 item(s) from 70 to 68
-  move 9/50: 1 item(s) from 70 to 69
-  move 10/50: 1 item(s) from 76 to 75
-  move 11/50: 2 item(s) from 78 to 77
-  move 12/50: 1 item(s) from 86 to 85
-  move 13/50: 1 item(s) from 91 to 90
-  move 14/50: 1 item(s) from 94 to 91
-  move 15/50: 3 item(s) from 93 to 92
-  move 16/50: 1 item(s) from 98 to 96
-  move 17/50: 1 item(s) from 98 to 97
-  move 18/50: 1 item(s) from 103 to 102
-  move 19/50: 1 item(s) from 105 to 103
-  move 20/50: 1 item(s) from 105 to 104
-  move 21/50: 1 item(s) from 112 to 111
-  move 22/50: 2 item(s) from 115 to 114
-  move 23/50: 1 item(s) from 118 to 117
-  move 24/50: 1 item(s) from 122 to 121
-  move 25/50: 1 item(s) from 129 to 128
-  move 26/50: 1 item(s) from 136 to 135
-  move 27/50: 1 item(s) from 141 to 140
-  move 28/50: 1 item(s) from 148 to 147
-  move 29/50: 1 item(s) from 153 to 151
-  move 30/50: 2 item(s) from 156 to 155
-  move 31/50: 1 item(s) from 161 to 158
-  move 32/50: 1 item(s) from 163 to 162
-  move 33/50: 2 item(s) from 165 to 163
-  move 34/50: 1 item(s) from 166 to 165
-  move 35/50: 1 item(s) from 168 to 166
-  move 36/50: 1 item(s) from 168 to 167
-  move 37/50: 1 item(s) from 170 to 168
-  move 38/50: 2 item(s) from 170 to 169
-  move 39/50: 1 item(s) from 173 to 172
-  move 40/50: 1 item(s) from 177 to 174
-  move 41/50: 1 item(s) from 178 to 177
-  move 42/50: 3 item(s) from 180 to 179
-  move 43/50: 1 item(s) from 184 to 182
-  move 44/50: 2 item(s) from 184 to 183
-  move 45/50: 2 item(s) from 187 to 186
-  move 46/50: 1 item(s) from 229 to 191
-  move 47/50: 1 item(s) from 196 to 192
-  move 48/50: 1 item(s) from 194 to 193
-  move 49/50: 1 item(s) from 196 to 195
-  move 50/50: 39 item(s) from 201 to 200
+Reorder plan: 48 operation(s) for 1168 item(s).
+Applying 48 reorder operation(s)...
+  move 1/48: 1 item(s) from 29 to 25
+  move 2/48: 3 item(s) from 27 to 26
+  move 3/48: 1 item(s) from 55 to 48
+  move 4/48: 1 item(s) from 50 to 49
+  move 5/48: 4 item(s) from 52 to 51
+  move 6/48: 1 item(s) from 65 to 63
+  move 7/48: 1 item(s) from 65 to 64
+  move 8/48: 1 item(s) from 68 to 67
+  move 9/48: 1 item(s) from 73 to 71
+  move 10/48: 1 item(s) from 73 to 72
+  move 11/48: 2 item(s) from 76 to 75
+  move 12/48: 1 item(s) from 79 to 78
+  move 13/48: 1 item(s) from 91 to 90
+  move 14/48: 1 item(s) from 97 to 95
+  move 15/48: 1 item(s) from 97 to 96
+  move 16/48: 1 item(s) from 99 to 97
+  move 17/48: 1 item(s) from 99 to 98
+  move 18/48: 1 item(s) from 101 to 99
+  move 19/48: 2 item(s) from 101 to 100
+  move 20/48: 1 item(s) from 107 to 104
+  move 21/48: 1 item(s) from 107 to 106
+  move 22/48: 1 item(s) from 115 to 109
+  move 23/48: 1 item(s) from 114 to 113
+  move 24/48: 1 item(s) from 117 to 116
+  move 25/48: 1 item(s) from 130 to 129
+  move 26/48: 1 item(s) from 141 to 140
+  move 27/48: 1 item(s) from 148 to 147
+  move 28/48: 1 item(s) from 154 to 153
+  move 29/48: 1 item(s) from 158 to 157
+  move 30/48: 1 item(s) from 160 to 158
+  move 31/48: 1 item(s) from 163 to 162
+  move 32/48: 1 item(s) from 166 to 163
+  move 33/48: 1 item(s) from 168 to 165
+  move 34/48: 1 item(s) from 168 to 167
+  move 35/48: 1 item(s) from 170 to 169
+  move 36/48: 1 item(s) from 177 to 175
+  move 37/48: 2 item(s) from 177 to 176
+  move 38/48: 1 item(s) from 181 to 180
+  move 39/48: 1 item(s) from 186 to 183
+  move 40/48: 1 item(s) from 191 to 186
+  move 41/48: 1 item(s) from 189 to 187
+  move 42/48: 1 item(s) from 189 to 188
+  move 43/48: 1 item(s) from 191 to 189
+  move 44/48: 1 item(s) from 191 to 190
+  move 45/48: 1 item(s) from 195 to 192
+  move 46/48: 1 item(s) from 195 to 194
+  move 47/48: 1 item(s) from 198 to 196
+  move 48/48: 1 item(s) from 198 to 197
 
 Verifying the archive playlist...
 Verification passed: 1168 tracks in order.
@@ -80,7 +78,7 @@ Verification passed: 1168 tracks in order.
 Archive tracks: 1168
 Items removed: 0
 Tracks added: 0
-Reorder operations: 50
-Reorder duration: 13.10 seconds
-Finished: 2026-11-20T00:58:44.137771+00:00 (33.5s total)
+Reorder operations: 48
+Reorder duration: 16.36 seconds
+Finished: 2026-11-21T00:30:56.627793+00:00 (39.1s total)
 ======================================================================
