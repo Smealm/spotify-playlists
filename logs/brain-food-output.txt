@@ -2,7 +2,7 @@
 Spotify Playlist Archive Sync
 Current playlist order on top, full history below
 Duplicates: same Spotify ID, or same name/artist/duration
-Started: 2026-11-21T23:38:51.486375+00:00
+Started: 2026-11-22T23:56:28.786692+00:00
 ======================================================================
 
 Reading the archived history...
@@ -18,81 +18,10 @@ Target archive: 1169 unique tracks
 Duplicates dropped: 283 (same id: 200, same name/artist/duration: 83)
 
 Reading the archive playlist...
-Archive playlist before: 1168 item(s)
-Adding 1 missing track(s)...
-  added 1/1
-Reorder plan: 70 operation(s) for 1169 item(s).
-Applying 70 reorder operation(s)...
-  move 1/70: 1 item(s) from 1168 to 21
-  move 2/70: 1 item(s) from 23 to 22
-  move 3/70: 1 item(s) from 26 to 23
-  move 4/70: 1 item(s) from 26 to 24
-  move 5/70: 4 item(s) from 26 to 25
-  move 6/70: 1 item(s) from 32 to 29
-  move 7/70: 1 item(s) from 32 to 30
-  move 8/70: 3 item(s) from 32 to 31
-  move 9/70: 2 item(s) from 37 to 36
-  move 10/70: 1 item(s) from 40 to 39
-  move 11/70: 1 item(s) from 42 to 41
-  move 12/70: 1 item(s) from 45 to 44
-  move 13/70: 1 item(s) from 49 to 47
-  move 14/70: 1 item(s) from 50 to 49
-  move 15/70: 1 item(s) from 52 to 51
-  move 16/70: 3 item(s) from 54 to 53
-  move 17/70: 3 item(s) from 60 to 59
-  move 18/70: 1 item(s) from 65 to 64
-  move 19/70: 1 item(s) from 70 to 69
-  move 20/70: 1 item(s) from 73 to 72
-  move 21/70: 1 item(s) from 75 to 74
-  move 22/70: 1 item(s) from 77 to 75
-  move 23/70: 1 item(s) from 85 to 84
-  move 24/70: 1 item(s) from 91 to 89
-  move 25/70: 1 item(s) from 98 to 96
-  move 26/70: 1 item(s) from 98 to 97
-  move 27/70: 1 item(s) from 105 to 103
-  move 28/70: 1 item(s) from 110 to 104
-  move 29/70: 1 item(s) from 108 to 105
-  move 30/70: 4 item(s) from 107 to 106
-  move 31/70: 1 item(s) from 114 to 112
-  move 32/70: 1 item(s) from 114 to 113
-  move 33/70: 1 item(s) from 116 to 115
-  move 34/70: 1 item(s) from 119 to 118
-  move 35/70: 2 item(s) from 125 to 124
-  move 36/70: 1 item(s) from 129 to 128
-  move 37/70: 1 item(s) from 135 to 134
-  move 38/70: 1 item(s) from 138 to 137
-  move 39/70: 2 item(s) from 142 to 141
-  move 40/70: 1 item(s) from 148 to 147
-  move 41/70: 1 item(s) from 156 to 155
-  move 42/70: 1 item(s) from 158 to 157
-  move 43/70: 1 item(s) from 161 to 160
-  move 44/70: 1 item(s) from 164 to 162
-  move 45/70: 2 item(s) from 166 to 164
-  move 46/70: 1 item(s) from 170 to 169
-  move 47/70: 1 item(s) from 173 to 172
-  move 48/70: 1 item(s) from 175 to 173
-  move 49/70: 1 item(s) from 175 to 174
-  move 50/70: 1 item(s) from 177 to 175
-  move 51/70: 1 item(s) from 177 to 176
-  move 52/70: 1 item(s) from 181 to 180
-  move 53/70: 1 item(s) from 187 to 185
-  move 54/70: 1 item(s) from 187 to 186
-  move 55/70: 1 item(s) from 193 to 191
-  move 56/70: 2 item(s) from 195 to 192
-  move 57/70: 1 item(s) from 196 to 194
-  move 58/70: 1 item(s) from 200 to 196
-  move 59/70: 1 item(s) from 199 to 197
-  move 60/70: 1 item(s) from 199 to 198
-  move 61/70: 1 item(s) from 382 to 199
-  move 62/70: 39 item(s) from 202 to 200
-  move 63/70: 100 item(s) from 240 to 239
-  move 64/70: 100 item(s) from 340 to 339
-  move 65/70: 100 item(s) from 440 to 439
-  move 66/70: 100 item(s) from 540 to 539
-  move 67/70: 100 item(s) from 640 to 639
-  move 68/70: 100 item(s) from 740 to 739
-  move 69/70: 100 item(s) from 840 to 839
-  move 70/70: 12 item(s) from 940 to 939
+Archive playlist before: 1169 item(s)
+No tracks are missing from the archive playlist.
+Reorder plan: 0 operation(s) for 1169 item(s).
+Playlist is already in the desired order.
 
 Verifying the archive playlist...
 Verification passed: 1169 tracks in order.
@@ -100,8 +29,8 @@ Verification passed: 1169 tracks in order.
 ======================================================================
 Archive tracks: 1169
 Items removed: 0
-Tracks added: 1
-Reorder operations: 70
-Reorder duration: 20.52 seconds
-Finished: 2026-11-21T23:39:32.149586+00:00 (40.7s total)
+Tracks added: 0
+Reorder operations: 0
+Reorder duration: 0.00 seconds
+Finished: 2026-11-22T23:56:51.458410+00:00 (22.7s total)
 ======================================================================
