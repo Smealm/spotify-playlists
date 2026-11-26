@@ -1,7 +1,7 @@
 ======================================================================
 Spotify Playlist Reorder
 Newest added -> oldest added, duplicates removed
-Started: 2026-11-25T02:51:08.358653+00:00
+Started: 2026-11-26T01:59:30.070155+00:00
 ======================================================================
 
 Authenticating with Spotify...
@@ -12,31 +12,33 @@ Owner: Smealm
 Playlist ID: 1ABNnHJuhR18e5IE6LVC6o
 
 Reading playlist items...
-Found 5 playlist item(s).
+Found 6 playlist item(s).
 
 No duplicates found.
 
 Desired order (first 10):
 ----------------------------------------------------------------------
-  1. Ghost - Delta Heavy
-     added_at=2026-11-18T23:35:42+00:00
-  2. MOLLY TALK - ISOxo, Madeon
+  1. Mind Control - Dion Timmer, Smoakland
+     added_at=2026-11-25T18:58:38+00:00
+  2. Stealing Fire - Virtual Riot
+     added_at=2026-11-25T18:57:12+00:00
+  3. fuze - Skrillex, ISOxo
+     added_at=2026-11-25T18:49:38+00:00
+  4. MOLLY TALK - ISOxo, Madeon
      added_at=2026-11-18T23:30:30+00:00
-  3. Simulate - Dion Timmer, Nytrix
-     added_at=2026-11-18T20:37:25+00:00
-  4. ONE FOR YOU - ALLEYCVT, Levity
+  5. ONE FOR YOU - ALLEYCVT, Levity
      added_at=2026-11-18T20:16:06+00:00
-  5. Rise Again - Slushii, Aviella
+  6. Rise Again - Slushii, Aviella
      added_at=2026-11-18T20:13:20+00:00
 ----------------------------------------------------------------------
 Playlist is already in the desired order.
 
 Verifying the playlist...
-Verification passed: 5 tracks in order.
+Verification passed: 6 tracks in order.
 
 ======================================================================
 Duplicates removed: 0
 Reorder operations: 0
 Reorder duration: 0.00 seconds
-Finished: 2026-11-25T02:51:09.495757+00:00 (1.1s total)
+Finished: 2026-11-26T01:59:31.671134+00:00 (1.6s total)
 ======================================================================
