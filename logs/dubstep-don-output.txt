@@ -2,7 +2,7 @@
 Spotify Playlist Archive Sync
 Current playlist order on top, full history below
 Duplicates: same Spotify ID, or same name/artist/duration
-Started: 2026-11-25T02:50:35.362914+00:00
+Started: 2026-11-26T01:59:07.284724+00:00
 ======================================================================
 
 Reading the archived history...
@@ -22,46 +22,46 @@ Archive playlist before: 1653 item(s)
 No tracks are missing from the archive playlist.
 Reorder plan: 40 operation(s) for 1653 item(s).
 Applying 40 reorder operation(s)...
-  move 1/40: 1 item(s) from 46 to 45
-  move 2/40: 1 item(s) from 51 to 50
-  move 3/40: 1 item(s) from 58 to 57
-  move 4/40: 1 item(s) from 60 to 59
-  move 5/40: 1 item(s) from 74 to 73
-  move 6/40: 1 item(s) from 79 to 78
-  move 7/40: 1 item(s) from 82 to 81
-  move 8/40: 1 item(s) from 88 to 87
-  move 9/40: 1 item(s) from 92 to 90
-  move 10/40: 1 item(s) from 92 to 91
-  move 11/40: 1 item(s) from 97 to 95
-  move 12/40: 1 item(s) from 97 to 96
-  move 13/40: 1 item(s) from 104 to 102
-  move 14/40: 1 item(s) from 104 to 103
-  move 15/40: 1 item(s) from 107 to 106
-  move 16/40: 1 item(s) from 114 to 113
-  move 17/40: 1 item(s) from 121 to 120
-  move 18/40: 1 item(s) from 123 to 121
-  move 19/40: 1 item(s) from 125 to 124
-  move 20/40: 1 item(s) from 128 to 127
-  move 21/40: 1 item(s) from 130 to 128
-  move 22/40: 1 item(s) from 133 to 131
-  move 23/40: 1 item(s) from 134 to 133
-  move 24/40: 2 item(s) from 136 to 135
-  move 25/40: 1 item(s) from 141 to 139
-  move 26/40: 1 item(s) from 141 to 140
-  move 27/40: 1 item(s) from 143 to 142
-  move 28/40: 1 item(s) from 146 to 145
-  move 29/40: 1 item(s) from 149 to 147
-  move 30/40: 1 item(s) from 149 to 148
-  move 31/40: 1 item(s) from 167 to 166
-  move 32/40: 1 item(s) from 175 to 170
-  move 33/40: 1 item(s) from 173 to 172
-  move 34/40: 1 item(s) from 175 to 173
-  move 35/40: 1 item(s) from 175 to 174
-  move 36/40: 1 item(s) from 177 to 176
-  move 37/40: 1 item(s) from 179 to 177
-  move 38/40: 1 item(s) from 181 to 179
-  move 39/40: 1 item(s) from 187 to 185
-  move 40/40: 2 item(s) from 193 to 192
+  move 1/40: 1 item(s) from 70 to 68
+  move 2/40: 1 item(s) from 70 to 69
+  move 3/40: 1 item(s) from 72 to 71
+  move 4/40: 1 item(s) from 77 to 76
+  move 5/40: 1 item(s) from 89 to 87
+  move 6/40: 1 item(s) from 99 to 98
+  move 7/40: 1 item(s) from 102 to 101
+  move 8/40: 1 item(s) from 105 to 102
+  move 9/40: 1 item(s) from 108 to 107
+  move 10/40: 1 item(s) from 117 to 115
+  move 11/40: 1 item(s) from 117 to 116
+  move 12/40: 1 item(s) from 123 to 122
+  move 13/40: 1 item(s) from 128 to 127
+  move 14/40: 1 item(s) from 130 to 129
+  move 15/40: 1 item(s) from 133 to 132
+  move 16/40: 2 item(s) from 135 to 133
+  move 17/40: 1 item(s) from 139 to 136
+  move 18/40: 1 item(s) from 139 to 137
+  move 19/40: 1 item(s) from 140 to 139
+  move 20/40: 1 item(s) from 142 to 141
+  move 21/40: 1 item(s) from 149 to 148
+  move 22/40: 1 item(s) from 152 to 150
+  move 23/40: 1 item(s) from 154 to 153
+  move 24/40: 1 item(s) from 157 to 155
+  move 25/40: 1 item(s) from 162 to 160
+  move 26/40: 1 item(s) from 166 to 165
+  move 27/40: 1 item(s) from 170 to 168
+  move 28/40: 1 item(s) from 173 to 171
+  move 29/40: 2 item(s) from 173 to 172
+  move 30/40: 1 item(s) from 176 to 175
+  move 31/40: 1 item(s) from 179 to 177
+  move 32/40: 1 item(s) from 181 to 179
+  move 33/40: 1 item(s) from 183 to 182
+  move 34/40: 1 item(s) from 185 to 184
+  move 35/40: 1 item(s) from 191 to 189
+  move 36/40: 1 item(s) from 193 to 192
+  move 37/40: 1 item(s) from 195 to 194
+  move 38/40: 1 item(s) from 198 to 196
+  move 39/40: 1 item(s) from 650 to 197
+  move 40/40: 33 item(s) from 199 to 198
 
 Verifying the archive playlist...
 Verification passed: 1653 tracks in order.
@@ -71,6 +71,6 @@ Archive tracks: 1653
 Items removed: 0
 Tracks added: 0
 Reorder operations: 40
-Reorder duration: 12.07 seconds
-Finished: 2026-11-25T02:51:20.157058+00:00 (44.8s total)
+Reorder duration: 9.62 seconds
+Finished: 2026-11-26T01:59:45.493448+00:00 (38.2s total)
 ======================================================================
