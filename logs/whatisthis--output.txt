@@ -1,7 +1,7 @@
 ======================================================================
 Spotify Playlist Reorder
 Newest added -> oldest added, duplicates removed
-Started: 2026-11-26T01:59:30.070155+00:00
+Started: 2026-11-27T01:59:29.643055+00:00
 ======================================================================
 
 Authenticating with Spotify...
@@ -12,7 +12,7 @@ Owner: Smealm
 Playlist ID: 1ABNnHJuhR18e5IE6LVC6o
 
 Reading playlist items...
-Found 6 playlist item(s).
+Found 5 playlist item(s).
 
 No duplicates found.
 
@@ -22,23 +22,21 @@ Desired order (first 10):
      added_at=2026-11-25T18:58:38+00:00
   2. Stealing Fire - Virtual Riot
      added_at=2026-11-25T18:57:12+00:00
-  3. fuze - Skrillex, ISOxo
-     added_at=2026-11-25T18:49:38+00:00
-  4. MOLLY TALK - ISOxo, Madeon
+  3. MOLLY TALK - ISOxo, Madeon
      added_at=2026-11-18T23:30:30+00:00
-  5. ONE FOR YOU - ALLEYCVT, Levity
+  4. ONE FOR YOU - ALLEYCVT, Levity
      added_at=2026-11-18T20:16:06+00:00
-  6. Rise Again - Slushii, Aviella
+  5. Rise Again - Slushii, Aviella
      added_at=2026-11-18T20:13:20+00:00
 ----------------------------------------------------------------------
 Playlist is already in the desired order.
 
 Verifying the playlist...
-Verification passed: 6 tracks in order.
+Verification passed: 5 tracks in order.
 
 ======================================================================
 Duplicates removed: 0
 Reorder operations: 0
 Reorder duration: 0.00 seconds
-Finished: 2026-11-26T01:59:31.671134+00:00 (1.6s total)
+Finished: 2026-11-27T01:59:30.967463+00:00 (1.3s total)
 ======================================================================
